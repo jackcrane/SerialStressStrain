@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val usbFilter = IntentFilter().apply {
             addAction(usbPermissionAction)
@@ -81,6 +83,9 @@ class MainActivity : ComponentActivity() {
                     onRefresh = { serialViewModel.refreshDevices() },
                     onDeviceSelected = { serialViewModel.selectDevice(it) },
                     onBaudChange = { serialViewModel.setBaudRate(it) },
+                    onSampleWindowChange = { serialViewModel.setSampleWindow(it) },
+                    onYMinChange = { serialViewModel.setYMin(it) },
+                    onYMaxChange = { serialViewModel.setYMax(it) },
                     onConnect = { serialViewModel.requestConnect() },
                     onDisconnect = { serialViewModel.disconnect() }
                 )

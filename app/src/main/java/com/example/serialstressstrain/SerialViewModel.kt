@@ -24,6 +24,8 @@ import kotlinx.coroutines.withContext
 
 data class SerialDeviceUi(val id: Int, val title: String, val subtitle: String)
 
+data class ChartPoint(val x: Float, val y: Float)
+
 data class SerialUiState(
     val devices: List<SerialDeviceUi> = emptyList(),
     val selectedDeviceId: Int? = null,
@@ -31,8 +33,11 @@ data class SerialUiState(
     val isConnecting: Boolean = false,
     val isConnected: Boolean = false,
     val status: String = "Disconnected",
-    val log: List<String> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val chartPoints: List<ChartPoint> = emptyList(),
+    val sampleWindow: String = "10000",
+    val yMin: String = "",
+    val yMax: String = ""
 )
 
 class SerialViewModel(
@@ -49,6 +54,7 @@ class SerialViewModel(
     private var readJob: Job? = null
     private var pendingDeviceId: Int? = null
     private var currentDeviceId: Int? = null
+    private var partialLine: String = ""
 
     fun refreshDevices() {
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
@@ -82,6 +88,18 @@ class SerialViewModel(
 
     fun setBaudRate(value: String) {
         _uiState.update { it.copy(baudRate = value.filter { char -> char.isDigit() }, error = null) }
+    }
+
+    fun setSampleWindow(value: String) {
+        _uiState.update { it.copy(sampleWindow = value.filter { it.isDigit() }) }
+    }
+
+    fun setYMin(value: String) {
+        _uiState.update { it.copy(yMin = value) }
+    }
+
+    fun setYMax(value: String) {
+        _uiState.update { it.copy(yMax = value) }
     }
 
     fun requestConnect() {
@@ -145,7 +163,7 @@ class SerialViewModel(
 
     fun onDeviceDetached(device: UsbDevice?) {
         if (device != null && device.deviceId == currentDeviceId) {
-            appendLog("Device detached.")
+            _uiState.update { it.copy(status = "Device detached") }
             disconnect()
         }
         refreshDevices()
@@ -210,31 +228,56 @@ class SerialViewModel(
                     val len = activePort.read(buffer, 1000)
                     if (len > 0) {
                         val text = buffer.copyOf(len).toString(Charsets.UTF_8)
-                        appendLog(text)
+                        handleIncomingChunk(text)
                     }
                 } catch (ioe: IOException) {
-                    appendLog("Read error: ${ioe.message}")
+                    pushError("Read error: ${ioe.message}")
                     withContext(Dispatchers.Main) {
                         disconnect()
                     }
                     break
                 } catch (e: Exception) {
-                    appendLog("Unexpected error: ${e.message}")
+                    pushError("Unexpected error: ${e.message}")
                 }
             }
         }
     }
 
-    private fun appendLog(message: String) {
-        _uiState.update { state ->
-            val updated = (state.log + message).takeLast(200)
-            state.copy(log = updated)
+    private fun handleIncomingChunk(text: String) {
+        val combined = (partialLine + text).replace("\r", "\n")
+        val segments = combined.split("\n")
+        if (combined.endsWith("\n")) {
+            partialLine = ""
+        } else {
+            partialLine = segments.last()
+        }
+        val completeLines = if (partialLine.isEmpty()) segments else segments.dropLast(1)
+        completeLines.forEach { rawLine ->
+            val line = rawLine.trim()
+            if (line.isNotEmpty()) {
+                processPacket(line)
+            }
+        }
+    }
+
+    private fun processPacket(line: String) {
+        val parts = line.split(",")
+        if (parts.size != 3) return
+        val type = parts[0].toIntOrNull() ?: return
+        val xVal = parts[1].toFloatOrNull() ?: return
+        val yVal = parts[2].toFloatOrNull() ?: return
+        when (type) {
+            0 -> _uiState.update { state ->
+                val maxPoints = state.sampleWindow.toIntOrNull()?.coerceAtLeast(1) ?: 10_000
+                val trimmed = (state.chartPoints + ChartPoint(xVal, yVal)).takeLast(maxPoints)
+                state.copy(chartPoints = trimmed)
+            }
+            1 -> _uiState.update { it.copy(chartPoints = emptyList()) }
         }
     }
 
     private fun pushError(message: String) {
         _uiState.update { it.copy(error = message) }
-        appendLog(message)
     }
 
     private fun closePort() {
@@ -251,6 +294,7 @@ class SerialViewModel(
         port = null
         connection = null
         currentDeviceId = null
+        partialLine = ""
     }
 
     override fun onCleared() {
