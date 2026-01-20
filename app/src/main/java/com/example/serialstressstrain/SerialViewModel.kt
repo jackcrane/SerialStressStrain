@@ -110,17 +110,37 @@ class SerialViewModel(
     }
 
     fun onPermissionResult(device: UsbDevice?, granted: Boolean) {
-        val deviceId = device?.deviceId ?: return
-        if (deviceId != pendingDeviceId) return
-        pendingDeviceId = null
-        if (!granted) {
+        val expectedId = pendingDeviceId ?: return
+        val deviceId = device?.deviceId
+        val resolvedDriver = when {
+            deviceId == expectedId -> driversById[expectedId]
+            deviceId == null -> {
+                // Some devices/ROMs deliver permission callbacks without the device extra.
+                refreshDevices()
+                driversById[expectedId]
+            }
+            else -> null
+        } ?: run {
+            pendingDeviceId = null
+            _uiState.update { it.copy(isConnecting = false, status = "Disconnected") }
+            pushError("Selected device is no longer available.")
+            return
+        }
+        if (deviceId != null && deviceId != expectedId) return
+        if (!granted && !usbManager.hasPermission(resolvedDriver.device)) {
+            pendingDeviceId = null
             pushError("USB permission denied.")
             _uiState.update { it.copy(isConnecting = false, status = "Permission denied") }
             return
         }
-        val baudRate = _uiState.value.baudRate.toIntOrNull() ?: return
-        val driver = driversById[deviceId] ?: return
-        openPort(driver, baudRate)
+        val baudRate = _uiState.value.baudRate.toIntOrNull() ?: run {
+            pendingDeviceId = null
+            _uiState.update { it.copy(isConnecting = false, status = "Disconnected") }
+            pushError("Baud rate must be a number.")
+            return
+        }
+        pendingDeviceId = null
+        openPort(resolvedDriver, baudRate)
     }
 
     fun onDeviceDetached(device: UsbDevice?) {

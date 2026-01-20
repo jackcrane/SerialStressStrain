@@ -24,11 +24,18 @@ class MainActivity : ComponentActivity() {
     private val usbPermissionAction = "${BuildConfig.APPLICATION_ID}.USB_PERMISSION"
 
     private val permissionIntent: PendingIntent by lazy {
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // UsbManager fills extras on our PendingIntent; must be mutable on API 31+
+                PendingIntent.FLAG_MUTABLE
+            } else {
+                PendingIntent.FLAG_IMMUTABLE
+            }
         PendingIntent.getBroadcast(
             this,
             0,
             Intent(usbPermissionAction),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            flags
         )
     }
 
