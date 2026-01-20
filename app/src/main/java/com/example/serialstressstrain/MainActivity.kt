@@ -1,47 +1,88 @@
 package com.example.serialstressstrain
 
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import com.example.serialstressstrain.ui.SerialScreen
+import com.example.serialstressstrain.usb.SerialUsbReceiver
 import com.example.serialstressstrain.ui.theme.SerialStressStrainTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val usbManager by lazy { getSystemService(Context.USB_SERVICE) as UsbManager }
+    private val usbPermissionAction = "${BuildConfig.APPLICATION_ID}.USB_PERMISSION"
+
+    private val permissionIntent: PendingIntent by lazy {
+        PendingIntent.getBroadcast(
+            this,
+            0,
+            Intent(usbPermissionAction),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private val serialViewModel: SerialViewModel by viewModels {
+        SerialViewModel.factory(usbManager, permissionIntent)
+    }
+
+    private val usbReceiver by lazy {
+        SerialUsbReceiver(
+            permissionAction = usbPermissionAction,
+            onPermission = { device, granted -> serialViewModel.onPermissionResult(device, granted) },
+            onAttached = { serialViewModel.refreshDevices() },
+            onDetached = { device -> serialViewModel.onDeviceDetached(device) }
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val usbFilter = IntentFilter().apply {
+            addAction(usbPermissionAction)
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(usbReceiver, usbFilter)
+        }
+
         setContent {
+            val state by serialViewModel.uiState.collectAsState()
+
+            LaunchedEffect(Unit) {
+                serialViewModel.refreshDevices()
+            }
+
             SerialStressStrainTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                SerialScreen(
+                    state = state,
+                    onRefresh = { serialViewModel.refreshDevices() },
+                    onDeviceSelected = { serialViewModel.selectDevice(it) },
+                    onBaudChange = { serialViewModel.setBaudRate(it) },
+                    onConnect = { serialViewModel.requestConnect() },
+                    onDisconnect = { serialViewModel.disconnect() }
+                )
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    SerialStressStrainTheme {
-        Greeting("Android")
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(usbReceiver)
     }
 }
