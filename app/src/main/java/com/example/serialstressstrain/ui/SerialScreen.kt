@@ -1,12 +1,17 @@
 package com.example.serialstressstrain.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
@@ -28,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,47 +56,119 @@ fun SerialScreen(
     onYMaxChange: (String) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onSaveAndReturn: () -> Unit,
+    onShowSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Serial Monitor") })
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "Pick a USB serial device and baud rate, then connect to start reading data.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-
-            DeviceDropdown(
-                devices = state.devices,
-                selectedDeviceId = state.selectedDeviceId,
-                onDeviceSelected = onDeviceSelected
-            )
-
-            OutlinedTextField(
-                value = state.baudRate,
-                onValueChange = onBaudChange,
-                label = { Text("Baud rate") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+    val shouldShowSettings = state.showSettings || !state.isConnected
+    var tapCount by remember(state.showSettings, state.isConnected) { mutableStateOf(0) }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(shouldShowSettings) {
+                detectTapGestures {
+                    if (!shouldShowSettings && state.isConnected) {
+                        tapCount++
+                        if (tapCount >= 5) {
+                            tapCount = 0
+                            onShowSettings()
+                        }
+                    } else {
+                        tapCount = 0
+                    }
+                }
+            }
+    ) {
+        Scaffold(
+            topBar = {
+                if (shouldShowSettings) {
+                    TopAppBar(title = { Text("Serial Monitor") })
+                }
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (shouldShowSettings) {
+                    SettingsContent(
+                        state = state,
+                        onRefresh = onRefresh,
+                        onDeviceSelected = onDeviceSelected,
+                        onBaudChange = onBaudChange,
+                        onSampleWindowChange = onSampleWindowChange,
+                        onYMinChange = onYMinChange,
+                        onYMaxChange = onYMaxChange,
+                        onConnect = onConnect,
+                        onDisconnect = onDisconnect,
+                        onSaveAndReturn = onSaveAndReturn
+                    )
+                } else {
+                    LineGraph(
+                        points = state.chartPoints,
+                        yMin = state.yMin.toFloatOrNull(),
+                        yMax = state.yMax.toFloatOrNull(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsContent(
+    state: SerialUiState,
+    onRefresh: () -> Unit,
+    onDeviceSelected: (Int?) -> Unit,
+    onBaudChange: (String) -> Unit,
+    onSampleWindowChange: (String) -> Unit,
+    onYMinChange: (String) -> Unit,
+    onYMaxChange: (String) -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onSaveAndReturn: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Pick a USB serial device and baud rate, then connect to start reading data.",
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        DeviceDropdown(
+            devices = state.devices,
+            selectedDeviceId = state.selectedDeviceId,
+            onDeviceSelected = onDeviceSelected
+        )
+
+        OutlinedTextField(
+            value = state.baudRate,
+            onValueChange = onBaudChange,
+            label = { Text("Baud rate") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = onRefresh,
                     enabled = !state.isConnecting
@@ -109,94 +187,92 @@ fun SerialScreen(
                     Text(connectLabel)
                 }
             }
-
-            Text(
-                text = "Status: ${state.status}",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            state.error?.let {
-                Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+            Button(
+                onClick = onSaveAndReturn,
+                enabled = state.isConnected
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                Text("Save & Return")
+            }
+        }
+
+        Text(
+            text = "Status: ${state.status}",
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+        )
+        state.error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Live graph (packetType 0)",
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Showing last ${state.chartPoints.size} pts",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = state.sampleWindow,
-                            onValueChange = onSampleWindowChange,
-                            label = { Text("Samples to keep (e.g. 10000)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Next
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = state.yMin,
-                            onValueChange = onYMinChange,
-                            label = { Text("Y min") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Text,
-                                imeAction = ImeAction.Next
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = state.yMax,
-                            onValueChange = onYMaxChange,
-                            label = { Text("Y max") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Text,
-                                imeAction = ImeAction.Done
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    LineGraph(
-                        points = state.chartPoints,
-                        yMin = state.yMin.toFloatOrNull(),
-                        yMax = state.yMax.toFloatOrNull(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                    Text(
+                        text = "Live graph (packetType 0)",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Showing last ${state.chartPoints.size} pts",
+                        style = MaterialTheme.typography.labelMedium
                     )
                 }
+                OutlinedTextField(
+                    value = state.sampleWindow,
+                    onValueChange = onSampleWindowChange,
+                    label = { Text("Samples to keep (e.g. 10000)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = state.yMin,
+                    onValueChange = onYMinChange,
+                    label = { Text("Y min") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = state.yMax,
+                    onValueChange = onYMaxChange,
+                    label = { Text("Y max") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LineGraph(
+                    points = state.chartPoints,
+                    yMin = state.yMin.toFloatOrNull(),
+                    yMax = state.yMax.toFloatOrNull(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp)
+                )
             }
         }
     }
@@ -346,7 +422,9 @@ private fun SerialScreenPreview() {
             onYMinChange = {},
             onYMaxChange = {},
             onConnect = {},
-            onDisconnect = {}
+            onDisconnect = {},
+            onSaveAndReturn = {},
+            onShowSettings = {}
         )
     }
 }

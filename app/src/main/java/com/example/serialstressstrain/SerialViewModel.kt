@@ -36,6 +36,7 @@ data class SerialUiState(
     val error: String? = null,
     val chartPoints: List<ChartPoint> = emptyList(),
     val sampleWindow: String = "10000",
+    val showSettings: Boolean = true,
     val yMin: String = "",
     val yMax: String = ""
 )
@@ -92,6 +93,10 @@ class SerialViewModel(
 
     fun setSampleWindow(value: String) {
         _uiState.update { it.copy(sampleWindow = value.filter { it.isDigit() }) }
+    }
+
+    fun setShowSettings(show: Boolean) {
+        _uiState.update { it.copy(showSettings = show) }
     }
 
     fun setYMin(value: String) {
@@ -171,7 +176,14 @@ class SerialViewModel(
 
     fun disconnect() {
         closePort()
-        _uiState.update { it.copy(isConnected = false, isConnecting = false, status = "Disconnected") }
+        _uiState.update {
+            it.copy(
+                isConnected = false,
+                isConnecting = false,
+                status = "Disconnected",
+                showSettings = true
+            )
+        }
     }
 
     private fun openPort(driver: UsbSerialDriver, baudRate: Int) {
@@ -207,6 +219,7 @@ class SerialViewModel(
                     isConnected = true,
                     isConnecting = false,
                     status = "Connected at $baudRate baud",
+                    showSettings = false,
                     error = null
                 )
             }

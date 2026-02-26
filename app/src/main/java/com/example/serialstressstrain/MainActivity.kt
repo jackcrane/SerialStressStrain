@@ -86,6 +86,8 @@ class MainActivity : ComponentActivity() {
                     onSampleWindowChange = { serialViewModel.setSampleWindow(it) },
                     onYMinChange = { serialViewModel.setYMin(it) },
                     onYMaxChange = { serialViewModel.setYMax(it) },
+                    onSaveAndReturn = { serialViewModel.setShowSettings(false) },
+                    onShowSettings = { serialViewModel.setShowSettings(true) },
                     onConnect = { serialViewModel.requestConnect() },
                     onDisconnect = { serialViewModel.disconnect() }
                 )
