@@ -89,7 +89,9 @@ class MainActivity : ComponentActivity() {
                     onSaveAndReturn = { serialViewModel.setShowSettings(false) },
                     onShowSettings = { serialViewModel.setShowSettings(true) },
                     onConnect = { serialViewModel.requestConnect() },
-                    onDisconnect = { serialViewModel.disconnect() }
+                    onDisconnect = { serialViewModel.disconnect() },
+                    onJogUp = { serialViewModel.jogUp() },
+                    onJogDown = { serialViewModel.jogDown() }
                 )
             }
         }

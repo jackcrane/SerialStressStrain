@@ -186,6 +186,20 @@ class SerialViewModel(
         }
     }
 
+    fun jogUp() {
+        sendControlPacket(
+            packet = JOG_UP_PACKET,
+            label = "Jog up"
+        )
+    }
+
+    fun jogDown() {
+        sendControlPacket(
+            packet = JOG_DOWN_PACKET,
+            label = "Jog down"
+        )
+    }
+
     private fun openPort(driver: UsbSerialDriver, baudRate: Int) {
         closePort()
         val connection = usbManager.openDevice(driver.device)
@@ -289,6 +303,32 @@ class SerialViewModel(
         }
     }
 
+    private fun sendControlPacket(packet: String, label: String) {
+        val activePort = port
+        if (activePort == null || !_uiState.value.isConnected) {
+            pushError("Connect to a device before jogging.")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                activePort.write(packet.toByteArray(Charsets.UTF_8), WRITE_TIMEOUT_MS)
+                _uiState.update {
+                    it.copy(
+                        status = "$label command sent",
+                        error = null
+                    )
+                }
+            } catch (ioe: IOException) {
+                pushError("Write error: ${ioe.message}")
+                withContext(Dispatchers.Main) {
+                    disconnect()
+                }
+            } catch (e: Exception) {
+                pushError("Failed to send $label command: ${e.message}")
+            }
+        }
+    }
+
     private fun pushError(message: String) {
         _uiState.update { it.copy(error = message) }
     }
@@ -316,6 +356,10 @@ class SerialViewModel(
     }
 
     companion object {
+        private const val WRITE_TIMEOUT_MS = 250
+        private const val JOG_UP_PACKET = "2,1,0\n"
+        private const val JOG_DOWN_PACKET = "2,-1,0\n"
+
         fun factory(
             usbManager: UsbManager,
             permissionIntent: PendingIntent

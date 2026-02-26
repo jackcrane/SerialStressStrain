@@ -14,11 +14,7 @@ Android app for reading USB serial data and plotting it as a live line graph.
 - USB serial support via `usb-serial-for-android`
 - Connect/disconnect flow with device attach/detach handling
 - Live chart rendering in Jetpack Compose
-- Settings screen for:
-- Device selection
-- Baud rate
-- Sample retention window
-- Y min / Y max overrides
+- Settings controls for device selection, baud rate, sample window, and Y-axis bounds
 - Full-screen chart mode after connect
 - Hidden settings shortcut: tap chart 5 times to reopen settings
 
@@ -34,6 +30,9 @@ Rules currently implemented:
 
 - `packetType = 0`: append point `(x, y)` to the graph
 - `packetType = 1`: clear the current graph
+- App -> Arduino jog commands:
+- `2,1,0`: jog up
+- `2,-1,0`: jog down
 - Any malformed line is ignored
 - `\r\n` and `\n` line endings are both handled
 
@@ -85,9 +84,7 @@ Notes:
 2. Select a detected device.
 3. Enter baud rate (default: `9600`).
 4. Tap `Connect`.
-5. Optionally set:
-- `Samples to keep` (default `10000`)
-- `Y min` and `Y max` (leave blank for auto-range)
+5. Optionally set `Samples to keep` (default `10000`) and `Y min`/`Y max` (leave blank for auto-range).
 6. Tap `Save & Return` to switch to full-screen chart.
 7. Tap the chart 5 times to reopen settings.
 8. Tap `Disconnect` when done.
@@ -120,4 +117,3 @@ Notes:
 - `app/src/main/java/com/example/serialstressstrain/SerialViewModel.kt`
 - `app/src/main/java/com/example/serialstressstrain/ui/SerialScreen.kt`
 - `app/src/main/java/com/example/serialstressstrain/usb/SerialUsbReceiver.kt`
-

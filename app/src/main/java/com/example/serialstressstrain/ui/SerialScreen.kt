@@ -4,6 +4,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +57,8 @@ fun SerialScreen(
     onYMaxChange: (String) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onJogUp: () -> Unit,
+    onJogDown: () -> Unit,
     onSaveAndReturn: () -> Unit,
     onShowSettings: () -> Unit,
     modifier: Modifier = Modifier
@@ -104,17 +107,32 @@ fun SerialScreen(
                         onYMaxChange = onYMaxChange,
                         onConnect = onConnect,
                         onDisconnect = onDisconnect,
+                        onJogUp = onJogUp,
+                        onJogDown = onJogDown,
                         onSaveAndReturn = onSaveAndReturn
                     )
                 } else {
-                    LineGraph(
-                        points = state.chartPoints,
-                        yMin = state.yMin.toFloatOrNull(),
-                        yMax = state.yMax.toFloatOrNull(),
+                    Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(12.dp)
-                    )
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LineGraph(
+                            points = state.chartPoints,
+                            yMin = state.yMin.toFloatOrNull(),
+                            yMax = state.yMax.toFloatOrNull(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                        JogControlsVertical(
+                            onJogUp = onJogUp,
+                            onJogDown = onJogDown,
+                            enabled = state.isConnected
+                        )
+                    }
                 }
             }
         }
@@ -132,6 +150,8 @@ private fun SettingsContent(
     onYMaxChange: (String) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onJogUp: () -> Unit,
+    onJogDown: () -> Unit,
     onSaveAndReturn: () -> Unit
 ) {
     Column(
@@ -265,15 +285,55 @@ private fun SettingsContent(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
-                LineGraph(
-                    points = state.chartPoints,
-                    yMin = state.yMin.toFloatOrNull(),
-                    yMax = state.yMax.toFloatOrNull(),
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp)
-                )
+                        .height(140.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LineGraph(
+                        points = state.chartPoints,
+                        yMin = state.yMin.toFloatOrNull(),
+                        yMax = state.yMax.toFloatOrNull(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                    JogControlsVertical(
+                        onJogUp = onJogUp,
+                        onJogDown = onJogDown,
+                        enabled = state.isConnected
+                    )
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun JogControlsVertical(
+    onJogUp: () -> Unit,
+    onJogDown: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Button(
+            onClick = onJogUp,
+            enabled = enabled
+        ) {
+            Text("Up")
+        }
+        Button(
+            onClick = onJogDown,
+            enabled = enabled
+        ) {
+            Text("Dn")
         }
     }
 }
@@ -423,6 +483,8 @@ private fun SerialScreenPreview() {
             onYMaxChange = {},
             onConnect = {},
             onDisconnect = {},
+            onJogUp = {},
+            onJogDown = {},
             onSaveAndReturn = {},
             onShowSettings = {}
         )
