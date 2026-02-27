@@ -1,5 +1,5 @@
 unsigned long lastReportTime = 0;
-const unsigned long reportIntervalMs = 10; // 10 ms = 100 Hz
+const unsigned long reportIntervalMs = 20; // 10 ms = 100 Hz
 
 long currentPositionSteps = 0;
 
@@ -12,11 +12,23 @@ const int limitPin1 = 7;
 const int limitPin2 = 6;
 
 const int stepDelayMicrosHome = 25;
-const int stepDelayMicros = 100;
+const int stepDelayMicros = 50;
 
 const float STEPS_PER_MM = 1600.0;
 
+void reportNow() {
+  float positionMM = currentPositionSteps / STEPS_PER_MM;
+  int a6Value = analogRead(A6);
+
+  Serial.print("0,");
+  Serial.print(positionMM, 4);
+  Serial.print(",");
+  Serial.print(a6Value);
+  Serial.print("\n");
+}
+
 void homeBoth() {
+
   digitalWrite(dirPin1, LOW);
   digitalWrite(dirPin2, LOW);
 
@@ -75,6 +87,13 @@ void stepBoth(long steps, bool directionUp) {
 
     if (directionUp) currentPositionSteps++;
     else currentPositionSteps--;
+
+    // ---- REPORT DURING MOVEMENT ----
+    unsigned long now = millis();
+    if (now - lastReportTime >= reportIntervalMs) {
+      lastReportTime = now;
+      reportNow();
+    }
   }
 }
 
@@ -87,29 +106,20 @@ void setup() {
   pinMode(limitPin1, INPUT_PULLUP);
   pinMode(limitPin2, INPUT_PULLUP);
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   homeBoth();
 }
 
 void loop() {
 
-  // ---- 10ms REPORTING ----
+  // ---- 10ms REPORTING WHEN IDLE ----
   unsigned long now = millis();
   if (now - lastReportTime >= reportIntervalMs) {
     lastReportTime = now;
-
-    float positionMM = currentPositionSteps / STEPS_PER_MM;
-    int a6Value = analogRead(A6);
-
-    Serial.print("0,");
-    Serial.print(positionMM, 4);
-    Serial.print(",");
-    Serial.print(a6Value);
-    Serial.print("\n");
+    reportNow();
   }
 
-  // ---- SERIAL CONTROL ----
   if (!Serial.available()) return;
 
   String input = Serial.readStringUntil('\n');
