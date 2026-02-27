@@ -505,20 +505,71 @@ private fun LineGraph(
     val sortedPoints = points.sortedBy { it.x }
     val xDataMin = sortedPoints.minOf { it.x }
     val xDataMax = sortedPoints.maxOf { it.x }
+    val xDataMid = (xDataMin + xDataMax) / 2f
     val adjustedYMin = FIXED_Y_MIN
     val adjustedYMax = FIXED_Y_MAX
     val lineColor = MaterialTheme.colorScheme.primary
     val axisColor = MaterialTheme.colorScheme.outlineVariant
+    val gridColor = axisColor.copy(alpha = 0.35f)
+    val yLabels = (Y_TICK_COUNT downTo 0).map { tick ->
+        val fraction = tick.toFloat() / Y_TICK_COUNT.toFloat()
+        String.format(Locale.US, "%.0f", adjustedYMin + (adjustedYMax - adjustedYMin) * fraction)
+    }
+    val xLabels = listOf(
+        String.format(Locale.US, "%.2f mm", xDataMin),
+        String.format(Locale.US, "%.2f mm", xDataMid),
+        String.format(Locale.US, "%.2f mm", xDataMax)
+    )
 
     Box(modifier = modifier) {
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
             val xRange = (xDataMax - xDataMin).let { if (it <= 0f) 1f else it }
             val yRange = (adjustedYMax - adjustedYMin).let { if (it <= 0f) 1f else it }
+            val leftPad = GRAPH_LEFT_PADDING.toPx()
+            val rightPad = GRAPH_RIGHT_PADDING.toPx()
+            val topPad = GRAPH_TOP_PADDING.toPx()
+            val bottomPad = GRAPH_BOTTOM_PADDING.toPx()
+
+            val left = leftPad
+            val right = size.width - rightPad
+            val top = topPad
+            val bottom = size.height - bottomPad
+            val chartWidth = if (right > left) right - left else 1f
+            val chartHeight = if (bottom > top) bottom - top else 1f
+
+            for (tick in 0..Y_TICK_COUNT) {
+                val fraction = tick.toFloat() / Y_TICK_COUNT.toFloat()
+                val yPos = bottom - (fraction * chartHeight)
+                drawLine(
+                    color = gridColor,
+                    start = androidx.compose.ui.geometry.Offset(left, yPos),
+                    end = androidx.compose.ui.geometry.Offset(right, yPos),
+                    strokeWidth = 1f
+                )
+            }
+
+            for (tick in 0..X_TICK_COUNT) {
+                val fraction = tick.toFloat() / X_TICK_COUNT.toFloat()
+                val xPos = left + (fraction * chartWidth)
+                drawLine(
+                    color = gridColor,
+                    start = androidx.compose.ui.geometry.Offset(xPos, top),
+                    end = androidx.compose.ui.geometry.Offset(xPos, bottom),
+                    strokeWidth = 1f
+                )
+            }
+
+            drawLine(
+                color = axisColor,
+                start = androidx.compose.ui.geometry.Offset(left, top),
+                end = androidx.compose.ui.geometry.Offset(left, bottom),
+                strokeWidth = 2f
+            )
 
             val path = Path()
             sortedPoints.forEachIndexed { index, point ->
-                val xPos = ((point.x - xDataMin) / xRange) * size.width
-                val yPos = size.height - ((point.y - adjustedYMin) / yRange) * size.height
+                val xPos = left + (((point.x - xDataMin) / xRange) * chartWidth)
+                val yPos = bottom - (((point.y - adjustedYMin) / yRange) * chartHeight)
                 if (index == 0) {
                     path.moveTo(xPos, yPos)
                 } else {
@@ -532,16 +583,52 @@ private fun LineGraph(
             )
             drawLine(
                 color = axisColor,
-                start = androidx.compose.ui.geometry.Offset(0f, size.height - 1f),
-                end = androidx.compose.ui.geometry.Offset(size.width, size.height - 1f),
+                start = androidx.compose.ui.geometry.Offset(left, bottom),
+                end = androidx.compose.ui.geometry.Offset(right, bottom),
                 strokeWidth = 2f
             )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(
+                    start = 2.dp,
+                    top = GRAPH_TOP_PADDING,
+                    bottom = GRAPH_BOTTOM_PADDING
+                ),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start
+        ) {
+            yLabels.forEach { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(
+                    start = GRAPH_LEFT_PADDING,
+                    end = GRAPH_RIGHT_PADDING,
+                    bottom = 2.dp
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            xLabels.forEach { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
         Text(
             text = liveLabel,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(8.dp),
+                .padding(start = GRAPH_LEFT_PADDING + 4.dp, top = 4.dp),
             style = MaterialTheme.typography.labelMedium
         )
     }
@@ -549,6 +636,12 @@ private fun LineGraph(
 
 private const val FIXED_Y_MIN = 0f
 private const val FIXED_Y_MAX = 450f
+private const val Y_TICK_COUNT = 5
+private const val X_TICK_COUNT = 4
+private val GRAPH_LEFT_PADDING = 42.dp
+private val GRAPH_RIGHT_PADDING = 8.dp
+private val GRAPH_TOP_PADDING = 22.dp
+private val GRAPH_BOTTOM_PADDING = 22.dp
 
 @Preview(showBackground = true)
 @Composable
@@ -595,7 +688,7 @@ private fun SerialScreenPreview() {
     }
 }
 
-private val JOG_DISTANCE_OPTIONS_MM = listOf(0.1, 1, 5, 10, 25)
+private val JOG_DISTANCE_OPTIONS_MM = listOf(0.1, 1, 5, 10, 50)
 
 @Composable
 private fun VerticalDistanceSegmentedControl(
