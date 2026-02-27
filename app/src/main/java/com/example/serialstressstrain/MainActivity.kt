@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
                     onSampleWindowChange = { serialViewModel.setSampleWindow(it) },
                     onYMinChange = { serialViewModel.setYMin(it) },
                     onYMaxChange = { serialViewModel.setYMax(it) },
+                    onCycleDistanceChange = { serialViewModel.setCycleDistanceMm(it) },
                     onSaveAndReturn = { serialViewModel.setShowSettings(false) },
                     onShowSettings = { serialViewModel.setShowSettings(true) },
                     onJogDistanceChange = { serialViewModel.setJogDistanceMm(it) },
@@ -95,6 +96,7 @@ class MainActivity : ComponentActivity() {
                     onJogDown = { serialViewModel.jogDown() },
                     onHome = { serialViewModel.home() },
                     onMtft = { serialViewModel.mtft() },
+                    onToggleCycle = { serialViewModel.toggleCycle() },
                     onSetZero = { serialViewModel.setChartZero() },
                     onClearPlot = { serialViewModel.clearPlot() }
                 )

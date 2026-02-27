@@ -1,7 +1,6 @@
 package com.example.serialstressstrain.ui
 
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -24,7 +22,6 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -60,6 +57,7 @@ fun SerialScreen(
     onSampleWindowChange: (String) -> Unit,
     onYMinChange: (String) -> Unit,
     onYMaxChange: (String) -> Unit,
+    onCycleDistanceChange: (String) -> Unit,
     onJogDistanceChange: (Int) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
@@ -67,6 +65,7 @@ fun SerialScreen(
     onJogDown: () -> Unit,
     onHome: () -> Unit,
     onMtft: () -> Unit,
+    onToggleCycle: () -> Unit,
     onSetZero: () -> Unit,
     onClearPlot: () -> Unit,
     onSaveAndReturn: () -> Unit,
@@ -115,6 +114,7 @@ fun SerialScreen(
                         onSampleWindowChange = onSampleWindowChange,
                         onYMinChange = onYMinChange,
                         onYMaxChange = onYMaxChange,
+                        onCycleDistanceChange = onCycleDistanceChange,
                         onJogDistanceChange = onJogDistanceChange,
                         onConnect = onConnect,
                         onDisconnect = onDisconnect,
@@ -122,6 +122,7 @@ fun SerialScreen(
                         onJogDown = onJogDown,
                         onHome = onHome,
                         onMtft = onMtft,
+                        onToggleCycle = onToggleCycle,
                         onSetZero = onSetZero,
                         onClearPlot = onClearPlot,
                         onSaveAndReturn = onSaveAndReturn
@@ -147,10 +148,12 @@ fun SerialScreen(
                             onJogDown = onJogDown,
                             onHome = onHome,
                             onMtft = onMtft,
+                            onToggleCycle = onToggleCycle,
                             onSetZero = onSetZero,
                             onClearPlot = onClearPlot,
                             selectedDistanceMm = state.jogDistanceMm,
                             onJogDistanceChange = onJogDistanceChange,
+                            isCycleRunning = state.isCycleRunning,
                             enabled = state.isConnected
                         )
                     }
@@ -169,6 +172,7 @@ private fun SettingsContent(
     onSampleWindowChange: (String) -> Unit,
     onYMinChange: (String) -> Unit,
     onYMaxChange: (String) -> Unit,
+    onCycleDistanceChange: (String) -> Unit,
     onJogDistanceChange: (Int) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
@@ -176,6 +180,7 @@ private fun SettingsContent(
     onJogDown: () -> Unit,
     onHome: () -> Unit,
     onMtft: () -> Unit,
+    onToggleCycle: () -> Unit,
     onSetZero: () -> Unit,
     onClearPlot: () -> Unit,
     onSaveAndReturn: () -> Unit
@@ -310,6 +315,17 @@ private fun SettingsContent(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(
+                    value = state.cycleDistanceMm,
+                    onValueChange = onCycleDistanceChange,
+                    label = { Text("Cycle distance (mm)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth(),
@@ -329,10 +345,12 @@ private fun SettingsContent(
                         onJogDown = onJogDown,
                         onHome = onHome,
                         onMtft = onMtft,
+                        onToggleCycle = onToggleCycle,
                         onSetZero = onSetZero,
                         onClearPlot = onClearPlot,
                         selectedDistanceMm = state.jogDistanceMm,
                         onJogDistanceChange = onJogDistanceChange,
+                        isCycleRunning = state.isCycleRunning,
                         enabled = state.isConnected
                     )
                 }
@@ -348,13 +366,16 @@ private fun JogControlsVertical(
     onJogDown: () -> Unit,
     onHome: () -> Unit,
     onMtft: () -> Unit,
+    onToggleCycle: () -> Unit,
     onSetZero: () -> Unit,
     onClearPlot: () -> Unit,
     selectedDistanceMm: Int,
     onJogDistanceChange: (Int) -> Unit,
+    isCycleRunning: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val motionControlsEnabled = enabled && !isCycleRunning
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -364,39 +385,53 @@ private fun JogControlsVertical(
             text = "Distance (mm)",
             style = MaterialTheme.typography.labelMedium
         )
-        VerticalDistanceSegmentedControl(
+        JogDistanceDropdown(
             selectedDistanceMm = selectedDistanceMm,
             onJogDistanceChange = onJogDistanceChange,
-            enabled = enabled,
-            modifier = Modifier.width(84.dp)
+            enabled = motionControlsEnabled,
+            modifier = Modifier.width(92.dp)
         )
         Button(
             onClick = onJogUp,
-            enabled = enabled
+            enabled = motionControlsEnabled
         ) {
             Text("Up")
         }
         Button(
             onClick = onJogDown,
-            enabled = enabled
+            enabled = motionControlsEnabled
         ) {
             Text("Dn")
         }
         Button(
             onClick = onHome,
-            enabled = enabled
+            enabled = motionControlsEnabled
         ) {
             Text("Home")
         }
         Button(
             onClick = onMtft,
-            enabled = enabled
+            enabled = motionControlsEnabled
         ) {
             Text("MTFT")
         }
         Button(
+            onClick = onToggleCycle,
+            enabled = enabled,
+            colors = if (isCycleRunning) {
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
+            } else {
+                ButtonDefaults.buttonColors()
+            }
+        ) {
+            Text("Cycle")
+        }
+        Button(
             onClick = onSetZero,
-            enabled = enabled
+            enabled = motionControlsEnabled
         ) {
             Text("Set 0")
         }
@@ -404,7 +439,7 @@ private fun JogControlsVertical(
             onClick = onClearPlot,
             enabled = enabled
         ) {
-            Text("Clear")
+            Text("Clear Graph")
         }
     }
 }
@@ -513,7 +548,11 @@ private fun LineGraph(
     val gridColor = axisColor.copy(alpha = 0.35f)
     val yLabels = (Y_TICK_COUNT downTo 0).map { tick ->
         val fraction = tick.toFloat() / Y_TICK_COUNT.toFloat()
-        String.format(Locale.US, "%.0f", adjustedYMin + (adjustedYMax - adjustedYMin) * fraction)
+        String.format(
+            Locale.US,
+            "%.0f kg",
+            (adjustedYMin + (adjustedYMax - adjustedYMin) * fraction) / 10f
+        )
     }
     val xLabels = listOf(
         String.format(Locale.US, "%.2f mm", xDataMin),
@@ -673,6 +712,7 @@ private fun SerialScreenPreview() {
             onSampleWindowChange = {},
             onYMinChange = {},
             onYMaxChange = {},
+            onCycleDistanceChange = {},
             onJogDistanceChange = {},
             onConnect = {},
             onDisconnect = {},
@@ -680,6 +720,7 @@ private fun SerialScreenPreview() {
             onJogDown = {},
             onHome = {},
             onMtft = {},
+            onToggleCycle = {},
             onSetZero = {},
             onClearPlot = {},
             onSaveAndReturn = {},
@@ -688,53 +729,47 @@ private fun SerialScreenPreview() {
     }
 }
 
-private val JOG_DISTANCE_OPTIONS_MM = listOf(0.1, 1, 5, 10, 50)
+private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10, 50)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VerticalDistanceSegmentedControl(
+private fun JogDistanceDropdown(
     selectedDistanceMm: Int,
     onJogDistanceChange: (Int) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(0.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        JOG_DISTANCE_OPTIONS_MM.forEachIndexed { index, distanceMm ->
-            val isSelected = selectedDistanceMm == distanceMm
-            Button(
-                onClick = { onJogDistanceChange(distanceMm) },
-                enabled = enabled,
-                shape = verticalSegmentedShape(index, JOG_DISTANCE_OPTIONS_MM.size),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
-                    contentColor = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                contentPadding = PaddingValues(vertical = 1.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(distanceMm.toString())
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = {
+            if (enabled) {
+                expanded = !expanded
             }
         }
-    }
-}
-
-private fun verticalSegmentedShape(index: Int, count: Int): RoundedCornerShape {
-    return when {
-        count <= 1 -> RoundedCornerShape(18.dp)
-        index == 0 -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
-        index == count - 1 -> RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)
-        else -> RoundedCornerShape(0.dp)
+    ) {
+        OutlinedTextField(
+            value = "$selectedDistanceMm mm",
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            enabled = enabled,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = modifier.menuAnchor()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            JOG_DISTANCE_OPTIONS_MM.forEach { distanceMm ->
+                DropdownMenuItem(
+                    text = { Text("$distanceMm mm") },
+                    onClick = {
+                        onJogDistanceChange(distanceMm)
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }
