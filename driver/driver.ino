@@ -1,6 +1,6 @@
-unsigned long packetNumber = 0;
 unsigned long lastReportTime = 0;
 const unsigned long reportIntervalMs = 100; // 10 Hz
+long currentPositionSteps = 0;
 
 const int stepPin1 = 2;
 const int dirPin1  = 3;
@@ -42,6 +42,8 @@ void homeBoth() {
 
     delayMicroseconds(stepDelayMicrosHome);
   }
+
+  currentPositionSteps = 0;
 }
 
 const float STEPS_PER_MM = 1600.0;   // adjust if different microstepping
@@ -79,15 +81,23 @@ void stepBoth(int steps, bool directionUp) {
     digitalWrite(stepPin2, LOW);
     delayMicroseconds(stepDelayMicros);
 
+    // ---- UPDATE ABSOLUTE POSITION ----
+    if (directionUp) {
+      currentPositionSteps++;
+    } else {
+      currentPositionSteps--;
+    }
+
     stepCounter++;
 
     if (stepCounter >= 160) {
       stepCounter = 0;
 
+      float positionMM = currentPositionSteps / STEPS_PER_MM;
       int a6Value = analogRead(A6);
 
       Serial.print("0,");
-      Serial.print(packetNumber++);
+      Serial.print(positionMM, 4);   // 4 decimal precision
       Serial.print(",");
       Serial.print(a6Value);
       Serial.print("\n");
