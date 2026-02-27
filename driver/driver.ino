@@ -43,21 +43,21 @@ void homeBoth() {
 }
 
 void moveUp(float mm) {
-  int steps = (int)(mm * STEPS_PER_MM);
+  long steps = (long)(mm * STEPS_PER_MM);
   stepBoth(steps, false);
 }
 
 void moveDown(float mm) {
-  int steps = (int)(mm * STEPS_PER_MM);
+  long steps = (long)(mm * STEPS_PER_MM);
   stepBoth(steps, true);
 }
 
-void stepBoth(int steps, bool directionUp) {
+void stepBoth(long steps, bool directionUp) {
 
   digitalWrite(dirPin1, directionUp ? HIGH : LOW);
   digitalWrite(dirPin2, directionUp ? HIGH : LOW);
 
-  for (int i = 0; i < steps; i++) {
+  for (long i = 0; i < steps; i++) {
 
     if (!directionUp) {
       if (digitalRead(limitPin1) == HIGH || digitalRead(limitPin2) == HIGH) {
