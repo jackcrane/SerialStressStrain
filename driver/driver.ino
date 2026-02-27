@@ -1,5 +1,6 @@
 unsigned long lastReportTime = 0;
-const unsigned long reportIntervalMs = 100; // 10 Hz
+const unsigned long reportIntervalMs = 10; // 10 ms = 100 Hz
+
 long currentPositionSteps = 0;
 
 const int stepPin1 = 2;
@@ -10,10 +11,10 @@ const int dirPin2  = 5;
 const int limitPin1 = 7;
 const int limitPin2 = 6;
 
-// Smaller = faster
-const int stepDelayMicrosHome = 25;   // try 100, 75, 50 if your driver allows
+const int stepDelayMicrosHome = 25;
 const int stepDelayMicros = 100;
-const int moveSteps = 8000;
+
+const float STEPS_PER_MM = 1600.0;
 
 void homeBoth() {
   digitalWrite(dirPin1, LOW);
@@ -24,13 +25,8 @@ void homeBoth() {
 
   while (!homed1 || !homed2) {
 
-    if (!homed1 && digitalRead(limitPin1) == HIGH) {
-      homed1 = true;
-    }
-
-    if (!homed2 && digitalRead(limitPin2) == HIGH) {
-      homed2 = true;
-    }
+    if (!homed1 && digitalRead(limitPin1) == HIGH) homed1 = true;
+    if (!homed2 && digitalRead(limitPin2) == HIGH) homed2 = true;
 
     if (!homed1) digitalWrite(stepPin1, HIGH);
     if (!homed2) digitalWrite(stepPin2, HIGH);
@@ -45,8 +41,6 @@ void homeBoth() {
 
   currentPositionSteps = 0;
 }
-
-const float STEPS_PER_MM = 1600.0;   // adjust if different microstepping
 
 void moveUp(float mm) {
   int steps = (int)(mm * STEPS_PER_MM);
@@ -63,8 +57,6 @@ void stepBoth(int steps, bool directionUp) {
   digitalWrite(dirPin1, directionUp ? HIGH : LOW);
   digitalWrite(dirPin2, directionUp ? HIGH : LOW);
 
-  unsigned long lastReportTime = millis();
-
   for (int i = 0; i < steps; i++) {
 
     if (!directionUp) {
@@ -73,7 +65,6 @@ void stepBoth(int steps, bool directionUp) {
       }
     }
 
-    // --- STEP ---
     digitalWrite(stepPin1, HIGH);
     digitalWrite(stepPin2, HIGH);
     delayMicroseconds(stepDelayMicros);
@@ -82,28 +73,8 @@ void stepBoth(int steps, bool directionUp) {
     digitalWrite(stepPin2, LOW);
     delayMicroseconds(stepDelayMicros);
 
-    // --- TRACK POSITION ---
-    if (directionUp) {
-      currentPositionSteps++;
-    } else {
-      currentPositionSteps--;
-    }
-
-    // --- TIME-BASED REPORTING (EVERY 10ms) ---
-    unsigned long now = millis();
-    if (now - lastReportTime >= 10) {
-
-      lastReportTime = now;
-
-      float positionMM = currentPositionSteps / STEPS_PER_MM;
-      int a6Value = analogRead(A6);
-
-      Serial.print("0,");
-      Serial.print(positionMM, 4);
-      Serial.print(",");
-      Serial.print(a6Value);
-      Serial.print("\n");
-    }
+    if (directionUp) currentPositionSteps++;
+    else currentPositionSteps--;
   }
 }
 
@@ -122,7 +93,23 @@ void setup() {
 }
 
 void loop() {
-  // ---- EXISTING SERIAL CONTROL ----
+
+  // ---- 10ms REPORTING ----
+  unsigned long now = millis();
+  if (now - lastReportTime >= reportIntervalMs) {
+    lastReportTime = now;
+
+    float positionMM = currentPositionSteps / STEPS_PER_MM;
+    int a6Value = analogRead(A6);
+
+    Serial.print("0,");
+    Serial.print(positionMM, 4);
+    Serial.print(",");
+    Serial.print(a6Value);
+    Serial.print("\n");
+  }
+
+  // ---- SERIAL CONTROL ----
   if (!Serial.available()) return;
 
   String input = Serial.readStringUntil('\n');
@@ -132,16 +119,13 @@ void loop() {
   if (firstComma == -1) return;
 
   int tool = input.substring(0, firstComma).toInt();
-
   int secondComma = input.indexOf(',', firstComma + 1);
 
-  // ---- HOME ----
   if (tool == 1) {
     homeBoth();
     return;
   }
 
-  // ---- MOVE ----
   if (tool == 0 && secondComma != -1) {
 
     int direction = input.substring(firstComma + 1, secondComma).toInt();
