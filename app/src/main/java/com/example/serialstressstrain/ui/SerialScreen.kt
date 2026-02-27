@@ -1,6 +1,7 @@
 package com.example.serialstressstrain.ui
 
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,10 +11,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +25,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -55,10 +60,12 @@ fun SerialScreen(
     onSampleWindowChange: (String) -> Unit,
     onYMinChange: (String) -> Unit,
     onYMaxChange: (String) -> Unit,
+    onJogDistanceChange: (Int) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
+    onHome: () -> Unit,
     onSaveAndReturn: () -> Unit,
     onShowSettings: () -> Unit,
     modifier: Modifier = Modifier
@@ -105,10 +112,12 @@ fun SerialScreen(
                         onSampleWindowChange = onSampleWindowChange,
                         onYMinChange = onYMinChange,
                         onYMaxChange = onYMaxChange,
+                        onJogDistanceChange = onJogDistanceChange,
                         onConnect = onConnect,
                         onDisconnect = onDisconnect,
                         onJogUp = onJogUp,
                         onJogDown = onJogDown,
+                        onHome = onHome,
                         onSaveAndReturn = onSaveAndReturn
                     )
                 } else {
@@ -130,6 +139,9 @@ fun SerialScreen(
                         JogControlsVertical(
                             onJogUp = onJogUp,
                             onJogDown = onJogDown,
+                            onHome = onHome,
+                            selectedDistanceMm = state.jogDistanceMm,
+                            onJogDistanceChange = onJogDistanceChange,
                             enabled = state.isConnected
                         )
                     }
@@ -148,10 +160,12 @@ private fun SettingsContent(
     onSampleWindowChange: (String) -> Unit,
     onYMinChange: (String) -> Unit,
     onYMaxChange: (String) -> Unit,
+    onJogDistanceChange: (Int) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
+    onHome: () -> Unit,
     onSaveAndReturn: () -> Unit
 ) {
     Column(
@@ -230,7 +244,7 @@ private fun SettingsContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(260.dp)
+                .height(340.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -288,7 +302,7 @@ private fun SettingsContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp),
+                        .height(220.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -303,6 +317,9 @@ private fun SettingsContent(
                     JogControlsVertical(
                         onJogUp = onJogUp,
                         onJogDown = onJogDown,
+                        onHome = onHome,
+                        selectedDistanceMm = state.jogDistanceMm,
+                        onJogDistanceChange = onJogDistanceChange,
                         enabled = state.isConnected
                     )
                 }
@@ -311,18 +328,32 @@ private fun SettingsContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun JogControlsVertical(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
+    onHome: () -> Unit,
+    selectedDistanceMm: Int,
+    onJogDistanceChange: (Int) -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Text(
+            text = "Distance (mm)",
+            style = MaterialTheme.typography.labelMedium
+        )
+        VerticalDistanceSegmentedControl(
+            selectedDistanceMm = selectedDistanceMm,
+            onJogDistanceChange = onJogDistanceChange,
+            enabled = enabled,
+            modifier = Modifier.width(84.dp)
+        )
         Button(
             onClick = onJogUp,
             enabled = enabled
@@ -334,6 +365,12 @@ private fun JogControlsVertical(
             enabled = enabled
         ) {
             Text("Dn")
+        }
+        Button(
+            onClick = onHome,
+            enabled = enabled
+        ) {
+            Text("Home")
         }
     }
 }
@@ -481,12 +518,65 @@ private fun SerialScreenPreview() {
             onSampleWindowChange = {},
             onYMinChange = {},
             onYMaxChange = {},
+            onJogDistanceChange = {},
             onConnect = {},
             onDisconnect = {},
             onJogUp = {},
             onJogDown = {},
+            onHome = {},
             onSaveAndReturn = {},
             onShowSettings = {}
         )
+    }
+}
+
+private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10, 50)
+
+@Composable
+private fun VerticalDistanceSegmentedControl(
+    selectedDistanceMm: Int,
+    onJogDistanceChange: (Int) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        JOG_DISTANCE_OPTIONS_MM.forEachIndexed { index, distanceMm ->
+            val isSelected = selectedDistanceMm == distanceMm
+            Button(
+                onClick = { onJogDistanceChange(distanceMm) },
+                enabled = enabled,
+                shape = verticalSegmentedShape(index, JOG_DISTANCE_OPTIONS_MM.size),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                    contentColor = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(distanceMm.toString())
+            }
+        }
+    }
+}
+
+private fun verticalSegmentedShape(index: Int, count: Int): RoundedCornerShape {
+    return when {
+        count <= 1 -> RoundedCornerShape(18.dp)
+        index == 0 -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+        index == count - 1 -> RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)
+        else -> RoundedCornerShape(0.dp)
     }
 }

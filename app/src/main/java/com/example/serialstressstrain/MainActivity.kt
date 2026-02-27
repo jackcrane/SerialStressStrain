@@ -88,10 +88,12 @@ class MainActivity : ComponentActivity() {
                     onYMaxChange = { serialViewModel.setYMax(it) },
                     onSaveAndReturn = { serialViewModel.setShowSettings(false) },
                     onShowSettings = { serialViewModel.setShowSettings(true) },
+                    onJogDistanceChange = { serialViewModel.setJogDistanceMm(it) },
                     onConnect = { serialViewModel.requestConnect() },
                     onDisconnect = { serialViewModel.disconnect() },
                     onJogUp = { serialViewModel.jogUp() },
-                    onJogDown = { serialViewModel.jogDown() }
+                    onJogDown = { serialViewModel.jogDown() },
+                    onHome = { serialViewModel.home() }
                 )
             }
         }

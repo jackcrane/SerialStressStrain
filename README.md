@@ -30,9 +30,11 @@ Rules currently implemented:
 
 - `packetType = 0`: append point `(x, y)` to the graph
 - `packetType = 1`: clear the current graph
-- App -> Arduino jog commands:
-- `2,1,0`: jog up
-- `2,-1,0`: jog down
+- App -> Arduino movement commands:
+- `0,1,<distanceMm>`: tool `0` (move), up direction (`1`)
+- `0,-1,<distanceMm>`: tool `0` (move), down direction (`-1`)
+- `distanceMm` options from UI: `1`, `5`, `10`, `50`
+- `1,0,0`: home
 - Any malformed line is ignored
 - `\r\n` and `\n` line endings are both handled
 

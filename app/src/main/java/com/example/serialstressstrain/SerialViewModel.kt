@@ -38,7 +38,8 @@ data class SerialUiState(
     val sampleWindow: String = "10000",
     val showSettings: Boolean = true,
     val yMin: String = "",
-    val yMax: String = ""
+    val yMax: String = "",
+    val jogDistanceMm: Int = 10
 )
 
 class SerialViewModel(
@@ -105,6 +106,11 @@ class SerialViewModel(
 
     fun setYMax(value: String) {
         _uiState.update { it.copy(yMax = value) }
+    }
+
+    fun setJogDistanceMm(value: Int) {
+        if (value !in JOG_DISTANCE_OPTIONS_MM) return
+        _uiState.update { it.copy(jogDistanceMm = value) }
     }
 
     fun requestConnect() {
@@ -187,16 +193,25 @@ class SerialViewModel(
     }
 
     fun jogUp() {
+        val distanceMm = _uiState.value.jogDistanceMm
         sendControlPacket(
-            packet = JOG_UP_PACKET,
-            label = "Jog up"
+            packet = movePacket(direction = MOVE_DIRECTION_UP, distanceMm = distanceMm),
+            label = "Jog up ${distanceMm}mm"
         )
     }
 
     fun jogDown() {
+        val distanceMm = _uiState.value.jogDistanceMm
         sendControlPacket(
-            packet = JOG_DOWN_PACKET,
-            label = "Jog down"
+            packet = movePacket(direction = MOVE_DIRECTION_DOWN, distanceMm = distanceMm),
+            label = "Jog down ${distanceMm}mm"
+        )
+    }
+
+    fun home() {
+        sendControlPacket(
+            packet = HOME_PACKET,
+            label = "Home"
         )
     }
 
@@ -329,6 +344,10 @@ class SerialViewModel(
         }
     }
 
+    private fun movePacket(direction: Int, distanceMm: Int): String {
+        return "$MOVE_TOOL,$direction,$distanceMm\n"
+    }
+
     private fun pushError(message: String) {
         _uiState.update { it.copy(error = message) }
     }
@@ -357,8 +376,13 @@ class SerialViewModel(
 
     companion object {
         private const val WRITE_TIMEOUT_MS = 250
-        private const val JOG_UP_PACKET = "2,1,0\n"
-        private const val JOG_DOWN_PACKET = "2,-1,0\n"
+        // Format: "<tool>,<direction>,<distance_mm>" for tool 0 (move):
+        // direction is 1 for up, -1 for down, and distance is selected in the UI.
+        private const val MOVE_TOOL = 0
+        private const val MOVE_DIRECTION_UP = 1
+        private const val MOVE_DIRECTION_DOWN = -1
+        private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10, 50)
+        private const val HOME_PACKET = "1,0,0\n"
 
         fun factory(
             usbManager: UsbManager,
