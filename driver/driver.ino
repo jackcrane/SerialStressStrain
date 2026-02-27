@@ -1,3 +1,7 @@
+unsigned long packetNumber = 0;
+unsigned long lastReportTime = 0;
+const unsigned long reportIntervalMs = 100; // 10 Hz
+
 const int stepPin1 = 2;
 const int dirPin1  = 3;
 const int stepPin2 = 4;
@@ -59,7 +63,6 @@ void stepBoth(int steps, bool directionUp) {
 
   for (int i = 0; i < steps; i++) {
 
-    // Optional safety: don't move downward past limits
     if (!directionUp) {
       if (digitalRead(limitPin1) == HIGH || digitalRead(limitPin2) == HIGH) {
         break;
@@ -92,6 +95,21 @@ void setup() {
 
 void loop() {
 
+  // ---- LOAD CELL STREAM ----
+  unsigned long now = millis();
+  if (now - lastReportTime >= reportIntervalMs) {
+    lastReportTime = now;
+
+    int a6Value = analogRead(A6);
+
+    Serial.print("0,");
+    Serial.print(packetNumber++);
+    Serial.print(",");
+    Serial.print(a6Value);
+    Serial.print("\n");
+  }
+
+  // ---- EXISTING SERIAL CONTROL ----
   if (!Serial.available()) return;
 
   String input = Serial.readStringUntil('\n');
@@ -101,7 +119,6 @@ void loop() {
   if (firstComma == -1) return;
 
   int tool = input.substring(0, firstComma).toInt();
-
 
   int secondComma = input.indexOf(',', firstComma + 1);
 
