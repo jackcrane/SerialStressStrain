@@ -63,7 +63,7 @@ void stepBoth(int steps, bool directionUp) {
   digitalWrite(dirPin1, directionUp ? HIGH : LOW);
   digitalWrite(dirPin2, directionUp ? HIGH : LOW);
 
-  int stepCounter = 0;
+  unsigned long lastReportTime = millis();
 
   for (int i = 0; i < steps; i++) {
 
@@ -73,6 +73,7 @@ void stepBoth(int steps, bool directionUp) {
       }
     }
 
+    // --- STEP ---
     digitalWrite(stepPin1, HIGH);
     digitalWrite(stepPin2, HIGH);
     delayMicroseconds(stepDelayMicros);
@@ -81,23 +82,24 @@ void stepBoth(int steps, bool directionUp) {
     digitalWrite(stepPin2, LOW);
     delayMicroseconds(stepDelayMicros);
 
-    // ---- UPDATE ABSOLUTE POSITION ----
+    // --- TRACK POSITION ---
     if (directionUp) {
       currentPositionSteps++;
     } else {
       currentPositionSteps--;
     }
 
-    stepCounter++;
+    // --- TIME-BASED REPORTING (EVERY 10ms) ---
+    unsigned long now = millis();
+    if (now - lastReportTime >= 10) {
 
-    if (stepCounter >= 160) {
-      stepCounter = 0;
+      lastReportTime = now;
 
       float positionMM = currentPositionSteps / STEPS_PER_MM;
       int a6Value = analogRead(A6);
 
       Serial.print("0,");
-      Serial.print(positionMM, 4);   // 4 decimal precision
+      Serial.print(positionMM, 4);
       Serial.print(",");
       Serial.print(a6Value);
       Serial.print("\n");

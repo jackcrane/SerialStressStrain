@@ -12,6 +12,7 @@ import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import java.io.IOException
+import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,8 @@ class SerialViewModel(
     private var pendingDeviceId: Int? = null
     private var currentDeviceId: Int? = null
     private var partialLine: String = ""
+    private var latestMotorDistance: Float? = null
+    private var xZeroOffset: Float = 0f
 
     fun refreshDevices() {
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
@@ -215,6 +218,31 @@ class SerialViewModel(
         )
     }
 
+    fun clearPlot() {
+        _uiState.update {
+            it.copy(
+                chartPoints = emptyList(),
+                status = "Plot cleared",
+                error = null
+            )
+        }
+    }
+
+    fun setChartZero() {
+        val currentDistance = latestMotorDistance
+        if (currentDistance == null) {
+            pushError("No motor distance received yet.")
+            return
+        }
+        xZeroOffset = currentDistance
+        _uiState.update {
+            it.copy(
+                status = "Chart zero set",
+                error = null
+            )
+        }
+    }
+
     private fun openPort(driver: UsbSerialDriver, baudRate: Int) {
         closePort()
         val connection = usbManager.openDevice(driver.device)
@@ -306,12 +334,24 @@ class SerialViewModel(
         val parts = line.split(",")
         if (parts.size != 3) return
         val type = parts[0].toIntOrNull() ?: return
-        val xVal = parts[1].toFloatOrNull() ?: return
-        val yVal = parts[2].toFloatOrNull() ?: return
+        val motorDistanceFromHome = parts[1].toFloatOrNull() ?: return
+        val loadCellValue = parts[2].toFloatOrNull() ?: return
         when (type) {
             0 -> _uiState.update { state ->
+                latestMotorDistance = motorDistanceFromHome
+                val adjustedMotorDistance = motorDistanceFromHome - xZeroOffset
                 val maxPoints = state.sampleWindow.toIntOrNull()?.coerceAtLeast(1) ?: 10_000
-                val trimmed = (state.chartPoints + ChartPoint(xVal, yVal)).takeLast(maxPoints)
+                val replacementIndex = state.chartPoints.indexOfFirst { existing ->
+                    abs(existing.x - adjustedMotorDistance) <= X_MATCH_TOLERANCE
+                }
+                val updatedPoints = if (replacementIndex >= 0) {
+                    state.chartPoints.toMutableList().apply {
+                        this[replacementIndex] = ChartPoint(adjustedMotorDistance, loadCellValue)
+                    }
+                } else {
+                    state.chartPoints + ChartPoint(adjustedMotorDistance, loadCellValue)
+                }
+                val trimmed = updatedPoints.takeLast(maxPoints)
                 state.copy(chartPoints = trimmed)
             }
             1 -> _uiState.update { it.copy(chartPoints = emptyList()) }
@@ -367,6 +407,8 @@ class SerialViewModel(
         connection = null
         currentDeviceId = null
         partialLine = ""
+        latestMotorDistance = null
+        xZeroOffset = 0f
     }
 
     override fun onCleared() {
@@ -376,6 +418,7 @@ class SerialViewModel(
 
     companion object {
         private const val WRITE_TIMEOUT_MS = 250
+        private const val X_MATCH_TOLERANCE = 0.0001f
         // Format: "<tool>,<direction>,<distance_mm>" for tool 0 (move):
         // direction is 1 for up, -1 for down, and distance is selected in the UI.
         private const val MOVE_TOOL = 0

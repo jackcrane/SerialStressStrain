@@ -93,7 +93,9 @@ class MainActivity : ComponentActivity() {
                     onDisconnect = { serialViewModel.disconnect() },
                     onJogUp = { serialViewModel.jogUp() },
                     onJogDown = { serialViewModel.jogDown() },
-                    onHome = { serialViewModel.home() }
+                    onHome = { serialViewModel.home() },
+                    onSetZero = { serialViewModel.setChartZero() },
+                    onClearPlot = { serialViewModel.clearPlot() }
                 )
             }
         }

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -66,6 +65,8 @@ fun SerialScreen(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
     onHome: () -> Unit,
+    onSetZero: () -> Unit,
+    onClearPlot: () -> Unit,
     onSaveAndReturn: () -> Unit,
     onShowSettings: () -> Unit,
     modifier: Modifier = Modifier
@@ -118,6 +119,8 @@ fun SerialScreen(
                         onJogUp = onJogUp,
                         onJogDown = onJogDown,
                         onHome = onHome,
+                        onSetZero = onSetZero,
+                        onClearPlot = onClearPlot,
                         onSaveAndReturn = onSaveAndReturn
                     )
                 } else {
@@ -140,6 +143,8 @@ fun SerialScreen(
                             onJogUp = onJogUp,
                             onJogDown = onJogDown,
                             onHome = onHome,
+                            onSetZero = onSetZero,
+                            onClearPlot = onClearPlot,
                             selectedDistanceMm = state.jogDistanceMm,
                             onJogDistanceChange = onJogDistanceChange,
                             enabled = state.isConnected
@@ -166,6 +171,8 @@ private fun SettingsContent(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
     onHome: () -> Unit,
+    onSetZero: () -> Unit,
+    onClearPlot: () -> Unit,
     onSaveAndReturn: () -> Unit
 ) {
     Column(
@@ -244,7 +251,6 @@ private fun SettingsContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(340.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -301,8 +307,7 @@ private fun SettingsContent(
                 )
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
+                        .fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -318,6 +323,8 @@ private fun SettingsContent(
                         onJogUp = onJogUp,
                         onJogDown = onJogDown,
                         onHome = onHome,
+                        onSetZero = onSetZero,
+                        onClearPlot = onClearPlot,
                         selectedDistanceMm = state.jogDistanceMm,
                         onJogDistanceChange = onJogDistanceChange,
                         enabled = state.isConnected
@@ -334,6 +341,8 @@ private fun JogControlsVertical(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
     onHome: () -> Unit,
+    onSetZero: () -> Unit,
+    onClearPlot: () -> Unit,
     selectedDistanceMm: Int,
     onJogDistanceChange: (Int) -> Unit,
     enabled: Boolean,
@@ -341,7 +350,7 @@ private fun JogControlsVertical(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -371,6 +380,18 @@ private fun JogControlsVertical(
             enabled = enabled
         ) {
             Text("Home")
+        }
+        Button(
+            onClick = onSetZero,
+            enabled = enabled
+        ) {
+            Text("Set 0")
+        }
+        Button(
+            onClick = onClearPlot,
+            enabled = enabled
+        ) {
+            Text("Clear")
         }
     }
 }
@@ -449,10 +470,11 @@ private fun LineGraph(
         return
     }
 
-    val xDataMin = points.first().x
-    val xDataMax = points.last().x
-    val yDataMin = points.minOf { it.y }
-    val yDataMax = points.maxOf { it.y }
+    val sortedPoints = points.sortedBy { it.x }
+    val xDataMin = sortedPoints.minOf { it.x }
+    val xDataMax = sortedPoints.maxOf { it.x }
+    val yDataMin = sortedPoints.minOf { it.y }
+    val yDataMax = sortedPoints.maxOf { it.y }
 
     val resolvedYMin = yMin ?: yDataMin
     val resolvedYMax = yMax ?: yDataMax
@@ -467,7 +489,7 @@ private fun LineGraph(
         val yRange = (adjustedYMax - adjustedYMin).let { if (it <= 0f) 1f else it }
 
         val path = Path()
-        points.forEachIndexed { index, point ->
+        sortedPoints.forEachIndexed { index, point ->
             val xPos = ((point.x - xDataMin) / xRange) * size.width
             val yPos = size.height - ((point.y - adjustedYMin) / yRange) * size.height
             if (index == 0) {
@@ -524,13 +546,15 @@ private fun SerialScreenPreview() {
             onJogUp = {},
             onJogDown = {},
             onHome = {},
+            onSetZero = {},
+            onClearPlot = {},
             onSaveAndReturn = {},
             onShowSettings = {}
         )
     }
 }
 
-private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10, 50)
+private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10)
 
 @Composable
 private fun VerticalDistanceSegmentedControl(
