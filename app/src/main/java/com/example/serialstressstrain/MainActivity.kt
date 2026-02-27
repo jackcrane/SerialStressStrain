@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
                     onJogUp = { serialViewModel.jogUp() },
                     onJogDown = { serialViewModel.jogDown() },
                     onHome = { serialViewModel.home() },
+                    onMtft = { serialViewModel.mtft() },
                     onSetZero = { serialViewModel.setChartZero() },
                     onClearPlot = { serialViewModel.clearPlot() }
                 )

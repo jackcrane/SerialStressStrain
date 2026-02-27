@@ -1,5 +1,5 @@
 unsigned long lastReportTime = 0;
-const unsigned long reportIntervalMs = 20; // 10 ms = 100 Hz
+const unsigned long reportIntervalMs = 20;
 
 long currentPositionSteps = 0;
 
@@ -15,6 +15,10 @@ const int stepDelayMicrosHome = 25;
 const int stepDelayMicros = 50;
 
 const float STEPS_PER_MM = 1600.0;
+
+// ---- SOFTWARE LIMIT ----
+const float MAX_TRAVEL_MM = 80.0;
+const long MAX_TRAVEL_STEPS = (long)(MAX_TRAVEL_MM * STEPS_PER_MM);
 
 void reportNow() {
   float positionMM = currentPositionSteps / STEPS_PER_MM;
@@ -71,6 +75,11 @@ void stepBoth(long steps, bool directionUp) {
 
   for (long i = 0; i < steps; i++) {
 
+    // ---- HARD LIMIT CHECK ----
+    if (directionUp && currentPositionSteps >= MAX_TRAVEL_STEPS) {
+      break;
+    }
+
     if (!directionUp) {
       if (digitalRead(limitPin1) == HIGH || digitalRead(limitPin2) == HIGH) {
         break;
@@ -88,13 +97,48 @@ void stepBoth(long steps, bool directionUp) {
     if (directionUp) currentPositionSteps++;
     else currentPositionSteps--;
 
-    // ---- REPORT DURING MOVEMENT ----
     unsigned long now = millis();
     if (now - lastReportTime >= reportIntervalMs) {
       lastReportTime = now;
       reportNow();
     }
   }
+}
+
+void moveToFirstTouch() {
+
+  const int touchThreshold = 10;
+
+  // Move in positive direction
+  digitalWrite(dirPin1, HIGH);
+  digitalWrite(dirPin2, HIGH);
+
+  while (true) {
+
+    // Stop if we hit software max travel
+    if (currentPositionSteps >= MAX_TRAVEL_STEPS) break;
+
+    int load = analogRead(A6);
+    if (load > touchThreshold) break;
+
+    digitalWrite(stepPin1, HIGH);
+    digitalWrite(stepPin2, HIGH);
+    delayMicroseconds(stepDelayMicrosHome);
+
+    digitalWrite(stepPin1, LOW);
+    digitalWrite(stepPin2, LOW);
+    delayMicroseconds(stepDelayMicrosHome);
+
+    currentPositionSteps++;
+
+    unsigned long now = millis();
+    if (now - lastReportTime >= reportIntervalMs) {
+      lastReportTime = now;
+      reportNow();
+    }
+  }
+
+  moveUp(3.0);
 }
 
 void setup() {
@@ -113,7 +157,6 @@ void setup() {
 
 void loop() {
 
-  // ---- 10ms REPORTING WHEN IDLE ----
   unsigned long now = millis();
   if (now - lastReportTime >= reportIntervalMs) {
     lastReportTime = now;
@@ -133,6 +176,11 @@ void loop() {
 
   if (tool == 1) {
     homeBoth();
+    return;
+  }
+
+  if (tool == 2) {
+    moveToFirstTouch();
     return;
   }
 

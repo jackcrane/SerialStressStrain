@@ -218,6 +218,13 @@ class SerialViewModel(
         )
     }
 
+    fun mtft() {
+        sendControlPacket(
+            packet = MTFT_PACKET,
+            label = "MTFT"
+        )
+    }
+
     fun clearPlot() {
         _uiState.update {
             it.copy(
@@ -426,6 +433,7 @@ class SerialViewModel(
         private const val MOVE_DIRECTION_DOWN = -1
         private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10, 50)
         private const val HOME_PACKET = "1,0,0\n"
+        private const val MTFT_PACKET = "2,0,0\n"
 
         fun factory(
             usbManager: UsbManager,

@@ -65,6 +65,7 @@ fun SerialScreen(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
     onHome: () -> Unit,
+    onMtft: () -> Unit,
     onSetZero: () -> Unit,
     onClearPlot: () -> Unit,
     onSaveAndReturn: () -> Unit,
@@ -119,6 +120,7 @@ fun SerialScreen(
                         onJogUp = onJogUp,
                         onJogDown = onJogDown,
                         onHome = onHome,
+                        onMtft = onMtft,
                         onSetZero = onSetZero,
                         onClearPlot = onClearPlot,
                         onSaveAndReturn = onSaveAndReturn
@@ -133,8 +135,6 @@ fun SerialScreen(
                     ) {
                         LineGraph(
                             points = state.chartPoints,
-                            yMin = state.yMin.toFloatOrNull(),
-                            yMax = state.yMax.toFloatOrNull(),
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -143,6 +143,7 @@ fun SerialScreen(
                             onJogUp = onJogUp,
                             onJogDown = onJogDown,
                             onHome = onHome,
+                            onMtft = onMtft,
                             onSetZero = onSetZero,
                             onClearPlot = onClearPlot,
                             selectedDistanceMm = state.jogDistanceMm,
@@ -171,6 +172,7 @@ private fun SettingsContent(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
     onHome: () -> Unit,
+    onMtft: () -> Unit,
     onSetZero: () -> Unit,
     onClearPlot: () -> Unit,
     onSaveAndReturn: () -> Unit
@@ -313,8 +315,6 @@ private fun SettingsContent(
                 ) {
                     LineGraph(
                         points = state.chartPoints,
-                        yMin = state.yMin.toFloatOrNull(),
-                        yMax = state.yMax.toFloatOrNull(),
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -323,6 +323,7 @@ private fun SettingsContent(
                         onJogUp = onJogUp,
                         onJogDown = onJogDown,
                         onHome = onHome,
+                        onMtft = onMtft,
                         onSetZero = onSetZero,
                         onClearPlot = onClearPlot,
                         selectedDistanceMm = state.jogDistanceMm,
@@ -341,6 +342,7 @@ private fun JogControlsVertical(
     onJogUp: () -> Unit,
     onJogDown: () -> Unit,
     onHome: () -> Unit,
+    onMtft: () -> Unit,
     onSetZero: () -> Unit,
     onClearPlot: () -> Unit,
     selectedDistanceMm: Int,
@@ -380,6 +382,12 @@ private fun JogControlsVertical(
             enabled = enabled
         ) {
             Text("Home")
+        }
+        Button(
+            onClick = onMtft,
+            enabled = enabled
+        ) {
+            Text("MTFT")
         }
         Button(
             onClick = onSetZero,
@@ -455,8 +463,6 @@ private fun DeviceDropdown(
 @Composable
 private fun LineGraph(
     points: List<ChartPoint>,
-    yMin: Float?,
-    yMax: Float?,
     modifier: Modifier = Modifier
 ) {
     if (points.isEmpty()) {
@@ -473,14 +479,8 @@ private fun LineGraph(
     val sortedPoints = points.sortedBy { it.x }
     val xDataMin = sortedPoints.minOf { it.x }
     val xDataMax = sortedPoints.maxOf { it.x }
-    val yDataMin = sortedPoints.minOf { it.y }
-    val yDataMax = sortedPoints.maxOf { it.y }
-
-    val resolvedYMin = yMin ?: yDataMin
-    val resolvedYMax = yMax ?: yDataMax
-    val autoPadding = (resolvedYMax - resolvedYMin).let { if (it <= 0f) 1f else it * 0.05f }
-    val adjustedYMin = if (yMin != null || yMax != null) resolvedYMin else resolvedYMin - autoPadding
-    val adjustedYMax = if (yMin != null || yMax != null) resolvedYMax else resolvedYMax + autoPadding
+    val adjustedYMin = FIXED_Y_MIN
+    val adjustedYMax = FIXED_Y_MAX
     val lineColor = MaterialTheme.colorScheme.primary
     val axisColor = MaterialTheme.colorScheme.outlineVariant
 
@@ -511,6 +511,9 @@ private fun LineGraph(
         )
     }
 }
+
+private const val FIXED_Y_MIN = 0f
+private const val FIXED_Y_MAX = 450f
 
 @Preview(showBackground = true)
 @Composable
@@ -546,6 +549,7 @@ private fun SerialScreenPreview() {
             onJogUp = {},
             onJogDown = {},
             onHome = {},
+            onMtft = {},
             onSetZero = {},
             onClearPlot = {},
             onSaveAndReturn = {},

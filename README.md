@@ -31,12 +31,14 @@ Rules currently implemented:
 - `packetType = 0`: append point `(x, y)` to the graph
 - For `packetType = 0`, X is motor distance from home and Y is load cell value.
 - Only one Y is kept per X motor position; revisiting an X overwrites that point's Y.
+- Y-axis display is fixed to `[0, 450]` (no auto-growth).
 - `packetType = 1`: clear the current graph
 - App -> Arduino movement commands:
 - `0,1,<distanceMm>`: tool `0` (move), up direction (`1`)
 - `0,-1,<distanceMm>`: tool `0` (move), down direction (`-1`)
 - `distanceMm` options from UI: `1`, `5`, `10`, `50`
 - `1,0,0`: home
+- `2,0,0`: MTFT
 - `Set 0` is local-only: it stores the current motor distance and subtracts it from future X values.
 - `Clear` is local-only: it clears the plotted points without sending a command.
 - Any malformed line is ignored
