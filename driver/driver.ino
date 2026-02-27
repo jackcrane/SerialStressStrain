@@ -11,28 +11,54 @@ const int limitPin2 = 6;
 AccelStepper stepper1(AccelStepper::DRIVER, stepPin1, dirPin1);
 AccelStepper stepper2(AccelStepper::DRIVER, stepPin2, dirPin2);
 
-void homeOne(AccelStepper &stepper, int limitPin) {
-  stepper.setMaxSpeed(800);
-  stepper.setAcceleration(400);
+void homeBoth() {
 
-  stepper.moveTo(-100000);  // move toward switch
+  stepper1.setMaxSpeed(10000);
+  stepper1.setAcceleration(400);
 
-  while (digitalRead(limitPin) == 0) {  // move UNTIL switch == 1
-    stepper.run();
+  stepper2.setMaxSpeed(10000);
+  stepper2.setAcceleration(400);
+
+  // Move toward switches (flip sign if wrong direction)
+  stepper1.moveTo(-100000);
+  stepper2.moveTo(-100000);
+
+  bool homed1 = false;
+  bool homed2 = false;
+
+  while (!homed1 || !homed2) {
+    if (!homed1) {
+      if (digitalRead(limitPin1) == 1) {
+        stepper1.stop();
+        stepper1.setCurrentPosition(0);
+        homed1 = true;
+      } else {
+        stepper1.run();
+      }
+    }
+
+    if (!homed2) {
+      if (digitalRead(limitPin2) == 1) {
+        stepper2.stop();
+        stepper2.setCurrentPosition(0);
+        homed2 = true;
+      } else {
+        stepper2.run();
+      }
+    }
   }
-
-  stepper.stop();
-  stepper.setCurrentPosition(0);
 }
 
 void setup() {
   pinMode(limitPin1, INPUT);
   pinMode(limitPin2, INPUT);
 
+  pinMode(limitPin1, INPUT_PULLUP);
+  pinMode(limitPin2, INPUT_PULLUP);
+
   Serial.begin(9600);
 
-  homeOne(stepper1, limitPin1);
-  homeOne(stepper2, limitPin2);
+  homeBoth();
 
   Serial.println("Homed");
 }
