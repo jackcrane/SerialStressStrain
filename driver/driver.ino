@@ -7,11 +7,12 @@ const int limitPin1 = 7;
 const int limitPin2 = 6;
 
 // Smaller = faster
-const int stepDelayMicros = 25;   // try 100, 75, 50 if your driver allows
+const int stepDelayMicrosHome = 25;   // try 100, 75, 50 if your driver allows
+const int stepDelayMicros = 100;
+const int moveSteps = 8000;
 
 void homeBoth() {
-
-  digitalWrite(dirPin1, LOW);   // homing direction
+  digitalWrite(dirPin1, LOW);
   digitalWrite(dirPin2, LOW);
 
   bool homed1 = false;
@@ -27,26 +28,50 @@ void homeBoth() {
       homed2 = true;
     }
 
-    // Step motor 1
-    if (!homed1) {
-      digitalWrite(stepPin1, HIGH);
+    if (!homed1) digitalWrite(stepPin1, HIGH);
+    if (!homed2) digitalWrite(stepPin2, HIGH);
+
+    delayMicroseconds(stepDelayMicrosHome);
+
+    if (!homed1) digitalWrite(stepPin1, LOW);
+    if (!homed2) digitalWrite(stepPin2, LOW);
+
+    delayMicroseconds(stepDelayMicrosHome);
+  }
+}
+
+const float STEPS_PER_MM = 1600.0;   // adjust if different microstepping
+
+void moveUp(float mm) {
+  int steps = (int)(mm * STEPS_PER_MM);
+  stepBoth(steps, false);
+}
+
+void moveDown(float mm) {
+  int steps = (int)(mm * STEPS_PER_MM);
+  stepBoth(steps, true);
+}
+
+void stepBoth(int steps, bool directionUp) {
+
+  digitalWrite(dirPin1, directionUp ? HIGH : LOW);
+  digitalWrite(dirPin2, directionUp ? HIGH : LOW);
+
+  for (int i = 0; i < steps; i++) {
+
+    // Optional safety: don't move downward past limits
+    if (!directionUp) {
+      if (digitalRead(limitPin1) == HIGH || digitalRead(limitPin2) == HIGH) {
+        break;
+      }
     }
 
-    // Step motor 2
-    if (!homed2) {
-      digitalWrite(stepPin2, HIGH);
-    }
-
+    digitalWrite(stepPin1, HIGH);
+    digitalWrite(stepPin2, HIGH);
     delayMicroseconds(stepDelayMicros);
 
-    if (!homed1) {
-      digitalWrite(stepPin1, LOW);
-    }
-
-    if (!homed2) {
-      digitalWrite(stepPin2, LOW);
-    }
-
+    digitalWrite(stepPin1, LOW);
+    digitalWrite(stepPin2, LOW);
     delayMicroseconds(stepDelayMicros);
   }
 }
@@ -63,8 +88,36 @@ void setup() {
   Serial.begin(9600);
 
   homeBoth();
-
-  Serial.println("Homed");
 }
 
-void loop() {}
+void loop() {
+
+  if (!Serial.available()) return;
+
+  String input = Serial.readStringUntil('\n');
+  input.trim();
+
+  int firstComma = input.indexOf(',');
+  if (firstComma == -1) return;
+
+  int tool = input.substring(0, firstComma).toInt();
+
+
+  int secondComma = input.indexOf(',', firstComma + 1);
+
+  // ---- HOME ----
+  if (tool == 1) {
+    homeBoth();
+    return;
+  }
+
+  // ---- MOVE ----
+  if (tool == 0 && secondComma != -1) {
+
+    int direction = input.substring(firstComma + 1, secondComma).toInt();
+    float distance = input.substring(secondComma + 1).toFloat();
+
+    if (direction == 1) moveUp(distance);
+    if (direction == -1) moveDown(distance);
+  }
+}
