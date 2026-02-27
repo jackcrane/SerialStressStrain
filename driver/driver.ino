@@ -61,6 +61,8 @@ void stepBoth(int steps, bool directionUp) {
   digitalWrite(dirPin1, directionUp ? HIGH : LOW);
   digitalWrite(dirPin2, directionUp ? HIGH : LOW);
 
+  int stepCounter = 0;
+
   for (int i = 0; i < steps; i++) {
 
     if (!directionUp) {
@@ -76,6 +78,20 @@ void stepBoth(int steps, bool directionUp) {
     digitalWrite(stepPin1, LOW);
     digitalWrite(stepPin2, LOW);
     delayMicroseconds(stepDelayMicros);
+
+    stepCounter++;
+
+    if (stepCounter >= 160) {
+      stepCounter = 0;
+
+      int a6Value = analogRead(A6);
+
+      Serial.print("0,");
+      Serial.print(packetNumber++);
+      Serial.print(",");
+      Serial.print(a6Value);
+      Serial.print("\n");
+    }
   }
 }
 
@@ -94,21 +110,6 @@ void setup() {
 }
 
 void loop() {
-
-  // ---- LOAD CELL STREAM ----
-  unsigned long now = millis();
-  if (now - lastReportTime >= reportIntervalMs) {
-    lastReportTime = now;
-
-    int a6Value = analogRead(A6);
-
-    Serial.print("0,");
-    Serial.print(packetNumber++);
-    Serial.print(",");
-    Serial.print(a6Value);
-    Serial.print("\n");
-  }
-
   // ---- EXISTING SERIAL CONTROL ----
   if (!Serial.available()) return;
 
