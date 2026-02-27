@@ -90,7 +90,7 @@ Notes:
 
 1. Tap `Refresh` to scan USB serial devices.
 2. Select a detected device.
-3. Enter baud rate (default: `9600`).
+3. Enter baud rate (default: `115200`).
 4. Tap `Connect`.
 5. Optionally set `Samples to keep` (default `10000`) and `Y min`/`Y max` (leave blank for auto-range).
 6. Tap `Save & Return` to switch to full-screen chart.

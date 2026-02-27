@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import com.example.serialstressstrain.ChartPoint
 import com.example.serialstressstrain.SerialDeviceUi
 import com.example.serialstressstrain.SerialUiState
@@ -135,6 +136,8 @@ fun SerialScreen(
                     ) {
                         LineGraph(
                             points = state.chartPoints,
+                            latestMotorPositionMm = state.latestMotorPositionMm,
+                            latestLoadCellRaw = state.latestLoadCellRaw,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -315,6 +318,8 @@ private fun SettingsContent(
                 ) {
                     LineGraph(
                         points = state.chartPoints,
+                        latestMotorPositionMm = state.latestMotorPositionMm,
+                        latestLoadCellRaw = state.latestLoadCellRaw,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -463,15 +468,36 @@ private fun DeviceDropdown(
 @Composable
 private fun LineGraph(
     points: List<ChartPoint>,
+    latestMotorPositionMm: Float?,
+    latestLoadCellRaw: Float?,
     modifier: Modifier = Modifier
 ) {
+    val motorText = latestMotorPositionMm?.let { value ->
+        String.format(Locale.US, "%.2f mm", value)
+    } ?: "-- mm"
+    val loadText = latestLoadCellRaw?.let { raw ->
+        String.format(Locale.US, "%.1f kg", raw / 10f)
+    } ?: "-- kg"
+    val liveLabel = "Pos: $motorText  Load: $loadText"
+
     if (points.isEmpty()) {
-        Column(
-            modifier = modifier.padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("No data yet.")
+        Box(modifier = modifier) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("No data yet.")
+            }
+            Text(
+                text = liveLabel,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp),
+                style = MaterialTheme.typography.labelMedium
+            )
         }
         return
     }
@@ -484,30 +510,39 @@ private fun LineGraph(
     val lineColor = MaterialTheme.colorScheme.primary
     val axisColor = MaterialTheme.colorScheme.outlineVariant
 
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val xRange = (xDataMax - xDataMin).let { if (it <= 0f) 1f else it }
-        val yRange = (adjustedYMax - adjustedYMin).let { if (it <= 0f) 1f else it }
+    Box(modifier = modifier) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val xRange = (xDataMax - xDataMin).let { if (it <= 0f) 1f else it }
+            val yRange = (adjustedYMax - adjustedYMin).let { if (it <= 0f) 1f else it }
 
-        val path = Path()
-        sortedPoints.forEachIndexed { index, point ->
-            val xPos = ((point.x - xDataMin) / xRange) * size.width
-            val yPos = size.height - ((point.y - adjustedYMin) / yRange) * size.height
-            if (index == 0) {
-                path.moveTo(xPos, yPos)
-            } else {
-                path.lineTo(xPos, yPos)
+            val path = Path()
+            sortedPoints.forEachIndexed { index, point ->
+                val xPos = ((point.x - xDataMin) / xRange) * size.width
+                val yPos = size.height - ((point.y - adjustedYMin) / yRange) * size.height
+                if (index == 0) {
+                    path.moveTo(xPos, yPos)
+                } else {
+                    path.lineTo(xPos, yPos)
+                }
             }
+            drawPath(
+                path = path,
+                color = lineColor,
+                style = Stroke(width = 4f, cap = StrokeCap.Round)
+            )
+            drawLine(
+                color = axisColor,
+                start = androidx.compose.ui.geometry.Offset(0f, size.height - 1f),
+                end = androidx.compose.ui.geometry.Offset(size.width, size.height - 1f),
+                strokeWidth = 2f
+            )
         }
-        drawPath(
-            path = path,
-            color = lineColor,
-            style = Stroke(width = 4f, cap = StrokeCap.Round)
-        )
-        drawLine(
-            color = axisColor,
-            start = androidx.compose.ui.geometry.Offset(0f, size.height - 1f),
-            end = androidx.compose.ui.geometry.Offset(size.width, size.height - 1f),
-            strokeWidth = 2f
+        Text(
+            text = liveLabel,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp),
+            style = MaterialTheme.typography.labelMedium
         )
     }
 }
@@ -525,7 +560,7 @@ private fun SerialScreenPreview() {
                     SerialDeviceUi(1, "Test Device", "VID:1234 PID:5678")
                 ),
                 selectedDeviceId = 1,
-                baudRate = "9600",
+                baudRate = "115200",
                 status = "Disconnected",
                 chartPoints = listOf(
                     ChartPoint(1f, 2f),
@@ -533,6 +568,8 @@ private fun SerialScreenPreview() {
                     ChartPoint(3f, 2.5f),
                     ChartPoint(4f, 4f)
                 ),
+                latestMotorPositionMm = 4f,
+                latestLoadCellRaw = 120f,
                 sampleWindow = "10000",
                 yMin = "0",
                 yMax = "5"
@@ -558,7 +595,7 @@ private fun SerialScreenPreview() {
     }
 }
 
-private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10)
+private val JOG_DISTANCE_OPTIONS_MM = listOf(0.1, 1, 5, 10, 25)
 
 @Composable
 private fun VerticalDistanceSegmentedControl(
@@ -591,7 +628,7 @@ private fun VerticalDistanceSegmentedControl(
                     }
                 ),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = 1.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(distanceMm.toString())

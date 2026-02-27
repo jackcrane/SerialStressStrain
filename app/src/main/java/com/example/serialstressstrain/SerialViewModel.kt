@@ -30,12 +30,14 @@ data class ChartPoint(val x: Float, val y: Float)
 data class SerialUiState(
     val devices: List<SerialDeviceUi> = emptyList(),
     val selectedDeviceId: Int? = null,
-    val baudRate: String = "9600",
+    val baudRate: String = "115200",
     val isConnecting: Boolean = false,
     val isConnected: Boolean = false,
     val status: String = "Disconnected",
     val error: String? = null,
     val chartPoints: List<ChartPoint> = emptyList(),
+    val latestMotorPositionMm: Float? = null,
+    val latestLoadCellRaw: Float? = null,
     val sampleWindow: String = "10000",
     val showSettings: Boolean = true,
     val yMin: String = "",
@@ -359,7 +361,11 @@ class SerialViewModel(
                     state.chartPoints + ChartPoint(adjustedMotorDistance, loadCellValue)
                 }
                 val trimmed = updatedPoints.takeLast(maxPoints)
-                state.copy(chartPoints = trimmed)
+                state.copy(
+                    chartPoints = trimmed,
+                    latestMotorPositionMm = adjustedMotorDistance,
+                    latestLoadCellRaw = loadCellValue
+                )
             }
             1 -> _uiState.update { it.copy(chartPoints = emptyList()) }
         }
