@@ -48,7 +48,7 @@ data class SerialUiState(
     val yMax: String = "",
     val jogDistanceMm: Int = 10,
     val cycleStartLoadValue: String = "300",
-    val cycleStopLoadValue: String = "20",
+    val cycleStopLoadValue: String = "15",
     val isCycleRunning: Boolean = false
 )
 
