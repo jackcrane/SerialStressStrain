@@ -57,7 +57,8 @@ fun SerialScreen(
     onSampleWindowChange: (String) -> Unit,
     onYMinChange: (String) -> Unit,
     onYMaxChange: (String) -> Unit,
-    onCycleDistanceChange: (String) -> Unit,
+    onCycleStartValueChange: (String) -> Unit,
+    onCycleStopValueChange: (String) -> Unit,
     onJogDistanceChange: (Int) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
@@ -114,7 +115,8 @@ fun SerialScreen(
                         onSampleWindowChange = onSampleWindowChange,
                         onYMinChange = onYMinChange,
                         onYMaxChange = onYMaxChange,
-                        onCycleDistanceChange = onCycleDistanceChange,
+                        onCycleStartValueChange = onCycleStartValueChange,
+                        onCycleStopValueChange = onCycleStopValueChange,
                         onJogDistanceChange = onJogDistanceChange,
                         onConnect = onConnect,
                         onDisconnect = onDisconnect,
@@ -172,7 +174,8 @@ private fun SettingsContent(
     onSampleWindowChange: (String) -> Unit,
     onYMinChange: (String) -> Unit,
     onYMaxChange: (String) -> Unit,
-    onCycleDistanceChange: (String) -> Unit,
+    onCycleStartValueChange: (String) -> Unit,
+    onCycleStopValueChange: (String) -> Unit,
     onJogDistanceChange: (Int) -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
@@ -316,9 +319,20 @@ private fun SettingsContent(
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = state.cycleDistanceMm,
-                    onValueChange = onCycleDistanceChange,
-                    label = { Text("Cycle distance (mm)") },
+                    value = state.cycleStartLoadValue,
+                    onValueChange = onCycleStartValueChange,
+                    label = { Text("Cycle start load value") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = state.cycleStopLoadValue,
+                    onValueChange = onCycleStopValueChange,
+                    label = { Text("Cycle stop load value") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
@@ -712,7 +726,8 @@ private fun SerialScreenPreview() {
             onSampleWindowChange = {},
             onYMinChange = {},
             onYMaxChange = {},
-            onCycleDistanceChange = {},
+            onCycleStartValueChange = {},
+            onCycleStopValueChange = {},
             onJogDistanceChange = {},
             onConnect = {},
             onDisconnect = {},

@@ -47,7 +47,8 @@ data class SerialUiState(
     val yMin: String = "",
     val yMax: String = "",
     val jogDistanceMm: Int = 10,
-    val cycleDistanceMm: String = "2",
+    val cycleStartLoadValue: String = "300",
+    val cycleStopLoadValue: String = "20",
     val isCycleRunning: Boolean = false
 )
 
@@ -67,6 +68,7 @@ class SerialViewModel(
     private var currentDeviceId: Int? = null
     private var partialLine: String = ""
     private var latestMotorDistance: Float? = null
+    private var latestLoadCellReading: Float? = null
     private var latestMotorDistanceUpdateAtMs: Long = 0L
     private var xZeroOffset: Float = 0f
     private var cycleJob: Job? = null
@@ -126,8 +128,12 @@ class SerialViewModel(
         _uiState.update { it.copy(jogDistanceMm = value) }
     }
 
-    fun setCycleDistanceMm(value: String) {
-        _uiState.update { it.copy(cycleDistanceMm = sanitizeDecimalInput(value)) }
+    fun setCycleStartLoadValue(value: String) {
+        _uiState.update { it.copy(cycleStartLoadValue = sanitizeDecimalInput(value)) }
+    }
+
+    fun setCycleStopLoadValue(value: String) {
+        _uiState.update { it.copy(cycleStopLoadValue = sanitizeDecimalInput(value)) }
     }
 
     fun toggleCycle() {
@@ -368,6 +374,7 @@ class SerialViewModel(
         when (type) {
             0 -> {
                 latestMotorDistance = motorDistanceFromHome
+                latestLoadCellReading = loadCellValue
                 latestMotorDistanceUpdateAtMs = System.currentTimeMillis()
                 _uiState.update { state ->
                 val adjustedMotorDistance = motorDistanceFromHome - xZeroOffset
@@ -413,73 +420,61 @@ class SerialViewModel(
         }
     }
 
-    private suspend fun writeControlPacket(packet: String, label: String) {
-        val activePort = port ?: throw IOException("Serial port is not open.")
-        activePort.write(packet.toByteArray(Charsets.UTF_8), WRITE_TIMEOUT_MS)
-        _uiState.update {
-            it.copy(
-                status = "$label command sent",
-                error = null
-            )
-        }
-    }
-
     private fun startCycle() {
         if (cycleJob != null || _uiState.value.isCycleRunning) return
         if (port == null || !_uiState.value.isConnected) {
             pushError("Connect to a device before starting cycle mode.")
             return
         }
-        val cycleDistanceMm = _uiState.value.cycleDistanceMm.toFloatOrNull()
-        if (cycleDistanceMm == null || cycleDistanceMm <= 0f) {
-            pushError("Cycle distance must be a positive number.")
+        val startLoadValue = _uiState.value.cycleStartLoadValue.toFloatOrNull()
+        val stopLoadValue = _uiState.value.cycleStopLoadValue.toFloatOrNull()
+        if (startLoadValue == null || stopLoadValue == null) {
+            pushError("Cycle start/stop values must be numbers.")
+            return
+        }
+        if (startLoadValue <= stopLoadValue) {
+            pushError("Cycle start value must be greater than cycle stop value.")
             return
         }
 
         _uiState.update {
             it.copy(
                 isCycleRunning = true,
-                status = "Cycle mode starting...",
+                status = "Cycle mode starting (start>$startLoadValue, stop<$stopLoadValue)...",
                 error = null
             )
         }
 
         cycleJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                var commandTimeMs = System.currentTimeMillis()
-                writeControlPacket(packet = MTFT_PACKET, label = "Cycle MTFT")
-                if (!waitForMotorToSettle(commandSentAtMs = commandTimeMs)) {
-                    pushError("Cycle start timed out while waiting for MTFT to finish.")
-                    return@launch
-                }
-
                 while (isActive) {
-                    val distanceMm = _uiState.value.cycleDistanceMm.toFloatOrNull()?.takeIf { it > 0f }
-                        ?: cycleDistanceMm
-
-                    commandTimeMs = System.currentTimeMillis()
-                    writeControlPacket(
-                        packet = movePacket(direction = MOVE_DIRECTION_DOWN, distanceMm = distanceMm),
-                        label = "Cycle down ${formatDistance(distanceMm)}mm"
-                    )
-                    if (!waitForMotorToSettle(commandSentAtMs = commandTimeMs)) {
-                        pushError("Cycle timed out while waiting for down movement to finish.")
+                    if (!runCyclePhase(
+                            direction = MOVE_DIRECTION_DOWN,
+                            threshold = startLoadValue,
+                            phaseName = "loading",
+                            isThresholdReached = { load -> load >= startLoadValue }
+                        )
+                    ) {
+                        pushError("Cycle timed out while loading to $startLoadValue.")
                         return@launch
                     }
 
-                    delay(CYCLE_PAUSE_MS)
+                    _uiState.update { it.copy(status = "Cycle holding load for 5s", error = null) }
+                    delay(CYCLE_DWELL_MS)
 
-                    commandTimeMs = System.currentTimeMillis()
-                    writeControlPacket(
-                        packet = movePacket(direction = MOVE_DIRECTION_UP, distanceMm = distanceMm),
-                        label = "Cycle up ${formatDistance(distanceMm)}mm"
-                    )
-                    if (!waitForMotorToSettle(commandSentAtMs = commandTimeMs)) {
-                        pushError("Cycle timed out while waiting for up movement to finish.")
+                    if (!runCyclePhase(
+                            direction = MOVE_DIRECTION_UP,
+                            threshold = stopLoadValue,
+                            phaseName = "unloading",
+                            isThresholdReached = { load -> load <= stopLoadValue }
+                        )
+                    ) {
+                        pushError("Cycle timed out while unloading to $stopLoadValue.")
                         return@launch
                     }
 
-                    delay(CYCLE_PAUSE_MS)
+                    _uiState.update { it.copy(status = "Cycle holding unload for 5s", error = null) }
+                    delay(CYCLE_DWELL_MS)
                 }
             } catch (_: CancellationException) {
             } catch (ioe: IOException) {
@@ -503,6 +498,50 @@ class SerialViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun runCyclePhase(
+        direction: Int,
+        threshold: Float,
+        phaseName: String,
+        isThresholdReached: (Float) -> Boolean
+    ): Boolean {
+        _uiState.update {
+            it.copy(
+                chartPoints = emptyList(),
+                status = "Cycle $phaseName started (graph cleared)",
+                error = null
+            )
+        }
+
+        val phaseStartedAtMs = System.currentTimeMillis()
+        while (currentCoroutineContext().isActive) {
+            val currentLoad = latestLoadCellReading
+            if (currentLoad != null && isThresholdReached(currentLoad)) {
+                _uiState.update {
+                    it.copy(
+                        status = "Cycle $phaseName reached $threshold (load=${formatDistance(currentLoad)})",
+                        error = null
+                    )
+                }
+                return true
+            }
+
+            if (System.currentTimeMillis() - phaseStartedAtMs >= CYCLE_PHASE_TIMEOUT_MS) {
+                return false
+            }
+
+            val commandTimeMs = System.currentTimeMillis()
+            writeControlPacket(
+                packet = movePacket(direction = direction, distanceMm = CYCLE_STEP_MM),
+                label = "Cycle $phaseName step",
+                updateStatus = false
+            )
+            if (!waitForMotorToSettle(commandSentAtMs = commandTimeMs)) {
+                return false
+            }
+        }
+        return false
     }
 
     private fun stopCycle(updateStatus: Boolean) {
@@ -556,6 +595,22 @@ class SerialViewModel(
         return false
     }
 
+    private suspend fun writeControlPacket(packet: String, label: String, updateStatus: Boolean) {
+        val activePort = port ?: throw IOException("Serial port is not open.")
+        activePort.write(packet.toByteArray(Charsets.UTF_8), WRITE_TIMEOUT_MS)
+        if (!updateStatus) return
+        _uiState.update {
+            it.copy(
+                status = "$label command sent",
+                error = null
+            )
+        }
+    }
+
+    private suspend fun writeControlPacket(packet: String, label: String) {
+        writeControlPacket(packet = packet, label = label, updateStatus = true)
+    }
+
     private fun movePacket(direction: Int, distanceMm: Float): String {
         return "$MOVE_TOOL,$direction,${formatDistance(distanceMm)}\n"
     }
@@ -603,6 +658,7 @@ class SerialViewModel(
         currentDeviceId = null
         partialLine = ""
         latestMotorDistance = null
+        latestLoadCellReading = null
         latestMotorDistanceUpdateAtMs = 0L
         xZeroOffset = 0f
     }
@@ -623,7 +679,9 @@ class SerialViewModel(
         private val JOG_DISTANCE_OPTIONS_MM = listOf(1, 5, 10, 50)
         private const val HOME_PACKET = "1,0,0\n"
         private const val MTFT_PACKET = "2,0,0\n"
-        private const val CYCLE_PAUSE_MS = 1_000L
+        private const val CYCLE_STEP_MM = 0.1f
+        private const val CYCLE_DWELL_MS = 5_000L
+        private const val CYCLE_PHASE_TIMEOUT_MS = 120_000L
         private const val CYCLE_SETTLE_POLL_MS = 100L
         private const val CYCLE_SETTLE_TIMEOUT_MS = 45_000L
         private const val CYCLE_SETTLE_STABLE_WINDOW_MS = 500L
