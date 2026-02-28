@@ -1,5 +1,6 @@
 package com.example.serialstressstrain.ui
 
+import android.graphics.Paint as AndroidPaint
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,10 +31,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +48,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 import com.example.serialstressstrain.ChartPoint
+import com.example.serialstressstrain.FailurePointAnnotation
 import com.example.serialstressstrain.SerialDeviceUi
 import com.example.serialstressstrain.SerialUiState
 import com.example.serialstressstrain.ui.theme.SerialStressStrainTheme
@@ -139,6 +145,7 @@ fun SerialScreen(
                     ) {
                         LineGraph(
                             points = state.chartPoints,
+                            failurePoint = state.failurePoint,
                             latestMotorPositionMm = state.latestMotorPositionMm,
                             latestLoadCellRaw = state.latestLoadCellRaw,
                             modifier = Modifier
@@ -348,6 +355,7 @@ private fun SettingsContent(
                 ) {
                     LineGraph(
                         points = state.chartPoints,
+                        failurePoint = state.failurePoint,
                         latestMotorPositionMm = state.latestMotorPositionMm,
                         latestLoadCellRaw = state.latestLoadCellRaw,
                         modifier = Modifier
@@ -517,6 +525,7 @@ private fun DeviceDropdown(
 @Composable
 private fun LineGraph(
     points: List<ChartPoint>,
+    failurePoint: FailurePointAnnotation?,
     latestMotorPositionMm: Float?,
     latestLoadCellRaw: Float?,
     modifier: Modifier = Modifier
@@ -560,6 +569,9 @@ private fun LineGraph(
     val lineColor = MaterialTheme.colorScheme.primary
     val axisColor = MaterialTheme.colorScheme.outlineVariant
     val gridColor = axisColor.copy(alpha = 0.35f)
+    val failureMarkerColor = MaterialTheme.colorScheme.error
+    val failureCalloutFillColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+    val failureCalloutTextColor = MaterialTheme.colorScheme.onSurface
     val yLabels = (Y_TICK_COUNT downTo 0).map { tick ->
         val fraction = tick.toFloat() / Y_TICK_COUNT.toFloat()
         String.format(
@@ -634,6 +646,119 @@ private fun LineGraph(
                 color = lineColor,
                 style = Stroke(width = 4f, cap = StrokeCap.Round)
             )
+            val failure = failurePoint
+            if (failure != null) {
+                val xFraction = ((failure.x - xDataMin) / xRange).coerceIn(0f, 1f)
+                val yFraction = ((failure.y - adjustedYMin) / yRange).coerceIn(0f, 1f)
+                val marker = androidx.compose.ui.geometry.Offset(
+                    x = left + (xFraction * chartWidth),
+                    y = bottom - (yFraction * chartHeight)
+                )
+                drawCircle(
+                    color = failureMarkerColor,
+                    radius = FAILURE_MARKER_RADIUS_PX,
+                    center = marker
+                )
+
+                val titleText = "Failure Point"
+                val deformationText = String.format(
+                    Locale.US,
+                    "Deformation: %.2f mm",
+                    failure.deformationMm
+                )
+                val maxStrengthText = String.format(
+                    Locale.US,
+                    "Max Strength: %.1f kg",
+                    failure.maxStrengthKg
+                )
+                val titlePaint = AndroidPaint().apply {
+                    color = failureCalloutTextColor.toArgb()
+                    textSize = FAILURE_TITLE_TEXT_SIZE_PX
+                    isFakeBoldText = true
+                    isAntiAlias = true
+                }
+                val bodyPaint = AndroidPaint().apply {
+                    color = failureCalloutTextColor.toArgb()
+                    textSize = FAILURE_BODY_TEXT_SIZE_PX
+                    isAntiAlias = true
+                }
+
+                val line1Height = titlePaint.fontMetrics.run { descent - ascent }
+                val line2Height = bodyPaint.fontMetrics.run { descent - ascent }
+                val line3Height = bodyPaint.fontMetrics.run { descent - ascent }
+                val textWidth = maxOf(
+                    titlePaint.measureText(titleText),
+                    bodyPaint.measureText(deformationText),
+                    bodyPaint.measureText(maxStrengthText)
+                )
+                val calloutWidth = maxOf(
+                    FAILURE_CALLOUT_MIN_WIDTH_PX,
+                    textWidth + (FAILURE_CALLOUT_HORIZONTAL_PADDING_PX * 2f)
+                )
+                val calloutHeight = (
+                    FAILURE_CALLOUT_VERTICAL_PADDING_PX * 2f +
+                        line1Height + line2Height + line3Height +
+                        (FAILURE_CALLOUT_LINE_SPACING_PX * 2f)
+                    )
+                val preferredLeft = marker.x + FAILURE_CALLOUT_OFFSET_X_PX
+                val leftIfFlipped = marker.x - FAILURE_CALLOUT_OFFSET_X_PX - calloutWidth
+                val calloutLeft = when {
+                    preferredLeft + calloutWidth <= right -> preferredLeft
+                    leftIfFlipped >= left -> leftIfFlipped
+                    else -> (right - calloutWidth).coerceAtLeast(left)
+                }
+                val maxTop = (bottom - calloutHeight).coerceAtLeast(top)
+                val calloutTop = (marker.y - FAILURE_CALLOUT_OFFSET_Y_PX - calloutHeight)
+                    .coerceIn(top, maxTop)
+                val connectorX = if (calloutLeft > marker.x) {
+                    calloutLeft
+                } else {
+                    calloutLeft + calloutWidth
+                }
+                val connectorY = calloutTop + (calloutHeight / 2f)
+                drawLine(
+                    color = failureMarkerColor,
+                    start = marker,
+                    end = androidx.compose.ui.geometry.Offset(connectorX, connectorY),
+                    strokeWidth = FAILURE_CONNECTOR_STROKE_PX
+                )
+                drawRoundRect(
+                    color = failureCalloutFillColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(calloutLeft, calloutTop),
+                    size = Size(calloutWidth, calloutHeight),
+                    cornerRadius = CornerRadius(FAILURE_CALLOUT_CORNER_RADIUS_PX)
+                )
+                drawRoundRect(
+                    color = failureMarkerColor.copy(alpha = 0.8f),
+                    topLeft = androidx.compose.ui.geometry.Offset(calloutLeft, calloutTop),
+                    size = Size(calloutWidth, calloutHeight),
+                    cornerRadius = CornerRadius(FAILURE_CALLOUT_CORNER_RADIUS_PX),
+                    style = Stroke(width = FAILURE_CALLOUT_BORDER_STROKE_PX)
+                )
+
+                val canvas = drawContext.canvas.nativeCanvas
+                var baseline = calloutTop + FAILURE_CALLOUT_VERTICAL_PADDING_PX - titlePaint.fontMetrics.ascent
+                canvas.drawText(
+                    titleText,
+                    calloutLeft + FAILURE_CALLOUT_HORIZONTAL_PADDING_PX,
+                    baseline,
+                    titlePaint
+                )
+                baseline += line1Height + FAILURE_CALLOUT_LINE_SPACING_PX
+                canvas.drawText(
+                    deformationText,
+                    calloutLeft + FAILURE_CALLOUT_HORIZONTAL_PADDING_PX,
+                    baseline,
+                    bodyPaint
+                )
+                baseline += line2Height + FAILURE_CALLOUT_LINE_SPACING_PX
+                canvas.drawText(
+                    maxStrengthText,
+                    calloutLeft + FAILURE_CALLOUT_HORIZONTAL_PADDING_PX,
+                    baseline,
+                    bodyPaint
+                )
+            }
             drawLine(
                 color = axisColor,
                 start = androidx.compose.ui.geometry.Offset(left, bottom),
@@ -691,6 +816,18 @@ private const val FIXED_Y_MIN = 0f
 private const val FIXED_Y_MAX = 450f
 private const val Y_TICK_COUNT = 5
 private const val X_TICK_COUNT = 4
+private const val FAILURE_MARKER_RADIUS_PX = 8f
+private const val FAILURE_CONNECTOR_STROKE_PX = 2.5f
+private const val FAILURE_CALLOUT_OFFSET_X_PX = 20f
+private const val FAILURE_CALLOUT_OFFSET_Y_PX = 18f
+private const val FAILURE_CALLOUT_HORIZONTAL_PADDING_PX = 12f
+private const val FAILURE_CALLOUT_VERTICAL_PADDING_PX = 10f
+private const val FAILURE_CALLOUT_LINE_SPACING_PX = 6f
+private const val FAILURE_CALLOUT_CORNER_RADIUS_PX = 12f
+private const val FAILURE_CALLOUT_BORDER_STROKE_PX = 2f
+private const val FAILURE_CALLOUT_MIN_WIDTH_PX = 156f
+private const val FAILURE_TITLE_TEXT_SIZE_PX = 30f
+private const val FAILURE_BODY_TEXT_SIZE_PX = 24f
 private val GRAPH_LEFT_PADDING = 42.dp
 private val GRAPH_RIGHT_PADDING = 8.dp
 private val GRAPH_TOP_PADDING = 22.dp

@@ -31,6 +31,13 @@ data class SerialDeviceUi(val id: Int, val title: String, val subtitle: String)
 
 data class ChartPoint(val x: Float, val y: Float)
 
+data class FailurePointAnnotation(
+    val x: Float,
+    val y: Float,
+    val deformationMm: Float,
+    val maxStrengthKg: Float
+)
+
 data class SerialUiState(
     val devices: List<SerialDeviceUi> = emptyList(),
     val selectedDeviceId: Int? = null,
@@ -40,6 +47,7 @@ data class SerialUiState(
     val status: String = "Disconnected",
     val error: String? = null,
     val chartPoints: List<ChartPoint> = emptyList(),
+    val failurePoint: FailurePointAnnotation? = null,
     val latestMotorPositionMm: Float? = null,
     val latestLoadCellRaw: Float? = null,
     val sampleWindow: String = "10000",
@@ -72,6 +80,8 @@ class SerialViewModel(
     private var latestMotorDistanceUpdateAtMs: Long = 0L
     private var xZeroOffset: Float = 0f
     private var cycleJob: Job? = null
+    private val recentSamples = ArrayDeque<ChartPoint>()
+    private var maxStrengthRawSinceReset: Float? = null
 
     fun refreshDevices() {
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
@@ -254,9 +264,11 @@ class SerialViewModel(
     }
 
     fun clearPlot() {
+        resetFailureTracking()
         _uiState.update {
             it.copy(
                 chartPoints = emptyList(),
+                failurePoint = null,
                 status = "Plot cleared",
                 error = null
             )
@@ -376,28 +388,37 @@ class SerialViewModel(
                 latestMotorDistance = motorDistanceFromHome
                 latestLoadCellReading = loadCellValue
                 latestMotorDistanceUpdateAtMs = System.currentTimeMillis()
-                _uiState.update { state ->
                 val adjustedMotorDistance = motorDistanceFromHome - xZeroOffset
-                val maxPoints = state.sampleWindow.toIntOrNull()?.coerceAtLeast(1) ?: 10_000
-                val replacementIndex = state.chartPoints.indexOfFirst { existing ->
-                    abs(existing.x - adjustedMotorDistance) <= X_MATCH_TOLERANCE
-                }
-                val updatedPoints = if (replacementIndex >= 0) {
-                    state.chartPoints.toMutableList().apply {
-                        this[replacementIndex] = ChartPoint(adjustedMotorDistance, loadCellValue)
-                    }
-                } else {
-                    state.chartPoints + ChartPoint(adjustedMotorDistance, loadCellValue)
-                }
-                val trimmed = updatedPoints.takeLast(maxPoints)
-                state.copy(
-                    chartPoints = trimmed,
-                    latestMotorPositionMm = adjustedMotorDistance,
-                    latestLoadCellRaw = loadCellValue
+                val incomingPoint = ChartPoint(adjustedMotorDistance, loadCellValue)
+                val detectedFailurePoint = detectFailurePoint(
+                    incomingPoint = incomingPoint,
+                    existing = _uiState.value.failurePoint
                 )
+                _uiState.update { state ->
+                    val maxPoints = state.sampleWindow.toIntOrNull()?.coerceAtLeast(1) ?: 10_000
+                    val replacementIndex = state.chartPoints.indexOfFirst { existing ->
+                        abs(existing.x - adjustedMotorDistance) <= X_MATCH_TOLERANCE
+                    }
+                    val updatedPoints = if (replacementIndex >= 0) {
+                        state.chartPoints.toMutableList().apply {
+                            this[replacementIndex] = incomingPoint
+                        }
+                    } else {
+                        state.chartPoints + incomingPoint
+                    }
+                    val trimmed = updatedPoints.takeLast(maxPoints)
+                    state.copy(
+                        chartPoints = trimmed,
+                        failurePoint = state.failurePoint ?: detectedFailurePoint,
+                        latestMotorPositionMm = adjustedMotorDistance,
+                        latestLoadCellRaw = loadCellValue
+                    )
+                }
             }
+            1 -> {
+                resetFailureTracking()
+                _uiState.update { it.copy(chartPoints = emptyList(), failurePoint = null) }
             }
-            1 -> _uiState.update { it.copy(chartPoints = emptyList()) }
         }
     }
 
@@ -506,9 +527,11 @@ class SerialViewModel(
         phaseName: String,
         isThresholdReached: (Float) -> Boolean
     ): Boolean {
+        resetFailureTracking()
         _uiState.update {
             it.copy(
                 chartPoints = emptyList(),
+                failurePoint = null,
                 status = "Cycle $phaseName started (graph cleared)",
                 error = null
             )
@@ -645,6 +668,7 @@ class SerialViewModel(
         stopCycle(updateStatus = false)
         readJob?.cancel()
         readJob = null
+        resetFailureTracking()
         try {
             port?.close()
         } catch (_: Exception) {
@@ -661,6 +685,38 @@ class SerialViewModel(
         latestLoadCellReading = null
         latestMotorDistanceUpdateAtMs = 0L
         xZeroOffset = 0f
+    }
+
+    private fun detectFailurePoint(
+        incomingPoint: ChartPoint,
+        existing: FailurePointAnnotation?
+    ): FailurePointAnnotation? {
+        val existingMax = maxStrengthRawSinceReset ?: incomingPoint.y
+        maxStrengthRawSinceReset = maxOf(existingMax, incomingPoint.y)
+
+        val maxDropAcrossWindow = recentSamples.maxOfOrNull { it.y - incomingPoint.y } ?: 0f
+        val isFailure = existing == null && maxDropAcrossWindow > FAILURE_DROP_THRESHOLD_UNITS
+        val nextFailurePoint = if (isFailure) {
+            FailurePointAnnotation(
+                x = incomingPoint.x,
+                y = incomingPoint.y,
+                deformationMm = incomingPoint.x,
+                maxStrengthKg = (maxStrengthRawSinceReset ?: incomingPoint.y) / LOAD_UNITS_PER_KG
+            )
+        } else {
+            existing
+        }
+
+        recentSamples.addLast(incomingPoint)
+        while (recentSamples.size > FAILURE_SAMPLE_WINDOW) {
+            recentSamples.removeFirst()
+        }
+        return nextFailurePoint
+    }
+
+    private fun resetFailureTracking() {
+        recentSamples.clear()
+        maxStrengthRawSinceReset = null
     }
 
     override fun onCleared() {
@@ -686,6 +742,9 @@ class SerialViewModel(
         private const val CYCLE_SETTLE_TIMEOUT_MS = 45_000L
         private const val CYCLE_SETTLE_STABLE_WINDOW_MS = 500L
         private const val CYCLE_SETTLE_TOLERANCE_MM = 0.02f
+        private const val FAILURE_DROP_THRESHOLD_UNITS = 50f
+        private const val FAILURE_SAMPLE_WINDOW = 2
+        private const val LOAD_UNITS_PER_KG = 10f
 
         fun factory(
             usbManager: UsbManager,
