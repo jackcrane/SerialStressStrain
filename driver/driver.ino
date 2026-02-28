@@ -40,6 +40,7 @@ void homeBoth() {
   bool homed2 = false;
 
   while (!homed1 || !homed2) {
+    int rand = random(0, 10) - 5;
 
     if (!homed1 && digitalRead(limitPin1) == HIGH) homed1 = true;
     if (!homed2 && digitalRead(limitPin2) == HIGH) homed2 = true;
@@ -47,12 +48,12 @@ void homeBoth() {
     if (!homed1) digitalWrite(stepPin1, HIGH);
     if (!homed2) digitalWrite(stepPin2, HIGH);
 
-    delayMicroseconds(stepDelayMicrosHome);
+    delayMicroseconds(stepDelayMicrosHome + (long)rand);
 
     if (!homed1) digitalWrite(stepPin1, LOW);
     if (!homed2) digitalWrite(stepPin2, LOW);
 
-    delayMicroseconds(stepDelayMicrosHome);
+    delayMicroseconds(stepDelayMicrosHome + (long)rand);
   }
 
   currentPositionSteps = 0;
@@ -86,13 +87,15 @@ void stepBoth(long steps, bool directionUp) {
       }
     }
 
+    int rand = random(1,20) - 10;
+
     digitalWrite(stepPin1, HIGH);
     digitalWrite(stepPin2, HIGH);
-    delayMicroseconds(stepDelayMicros);
+    delayMicroseconds(stepDelayMicros + rand);
 
     digitalWrite(stepPin1, LOW);
     digitalWrite(stepPin2, LOW);
-    delayMicroseconds(stepDelayMicros);
+    delayMicroseconds(stepDelayMicros + rand);
 
     if (directionUp) currentPositionSteps++;
     else currentPositionSteps--;
