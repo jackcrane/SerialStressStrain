@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val ciVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.toIntOrNull() ?: 1
+val ciVersionName = providers.gradleProperty("releaseVersionName").orNull ?: "1.0.0"
 
 android {
     namespace = "com.example.serialstressstrain"
@@ -14,8 +16,8 @@ android {
         applicationId = "com.example.serialstressstrain"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = ciVersionCode
+        versionName = ciVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
